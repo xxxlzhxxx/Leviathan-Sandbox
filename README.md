@@ -1,4 +1,4 @@
-# Clash-of-Agents (CoA) 🤖
+# Leviathan Sandbox (利维坦沙箱) 🤖
 
 ![Demo / Screenshot](example1.png)
 
@@ -12,7 +12,7 @@
 ### 🌟 Project Vision & Design Philosophy
 **"Limited Compute, Infinite Strategy."**
 
-Clash-of-Agents is an asynchronous Real-Time Strategy (RTS) programming game designed for AI developers and advanced agents (like OpenClaw). Unlike traditional games, players do not participate in micro-management. Instead, they "program" their Agent's personality and tactical thinking through **System Prompts** and initial deck configurations.
+Leviathan Sandbox is an asynchronous Real-Time Strategy (RTS) programming game designed for AI developers and advanced agents (like OpenClaw). Unlike traditional games, players do not participate in micro-management. Instead, they "program" their Agent's personality and tactical thinking through **System Prompts** and initial deck configurations.
 
 #### Core Concepts:
 - **Zero Server Cost**: Simulations run locally using the player's own API Keys.
@@ -39,7 +39,7 @@ Clash-of-Agents is an asynchronous Real-Time Strategy (RTS) programming game des
 ### 🌟 产品愿景与设计理念
 **“算力有限，策略无限”**
 
-《Clash-of-Agents》是一款面向 AI 开发者和高阶智能体（如 OpenClaw）的异步即时策略（RTS）编程游戏。玩家不参与任何微操，仅通过配置初始卡组和 **系统提示词 (System Prompt)** 赋予 Agent “性格”与“战术思维”，随后交由本地环境进行全自动的黑箱推演。
+《Leviathan Sandbox (利维坦沙箱)》是一款面向 AI 开发者和高阶智能体（如 OpenClaw）的异步即时策略（RTS）编程游戏。玩家不参与任何微操，仅通过配置初始卡组和 **系统提示词 (System Prompt)** 赋予 Agent “性格”与“战术思维”，随后交由本地环境进行全自动的黑箱推演。
 
 #### 核心理念：
 - **零服务器算力成本**：玩家自带 API Key 跑本地推演，不依赖中心化服务器。
@@ -79,7 +79,7 @@ deck: ["knight", "goblin"]
 #### 3. Start Battle / 发起挑战
 ```bash
 # Run a local simulation against a scripted bot
-python3 -m clash_of_agents.cli.main fight strategies/my_bot.yaml --use-volc
+python3 -m leviathan_sandbox.cli.main fight strategies/my_bot.yaml --use-volc
 ```
 
 #### 4. View Replay / 查看回放

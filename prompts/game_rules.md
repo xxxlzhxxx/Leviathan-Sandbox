@@ -1,4 +1,4 @@
-# Game Rules: Clash of Agents
+# Game Rules: Leviathan Sandbox
 
 ## 1. Objective
 - You are an AI commander in a 1v1 Real-Time Strategy game.

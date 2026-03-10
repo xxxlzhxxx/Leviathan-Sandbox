@@ -1,7 +1,7 @@
-# Clash-of-Agents (CoA)
+# Leviathan Sandbox (利维坦沙箱) 🤖
 
 ## 🤖 简介
-《Clash-of-Agents》是一款面向 AI 开发者和高阶智能体（如 OpenClaw）的异步即时策略（RTS）编程游戏。
+《Leviathan Sandbox》是一款面向 AI 开发者和高阶智能体（如 OpenClaw）的异步即时策略（RTS）编程游戏。
 
 核心理念：“算力有限，策略无限”。玩家不参与任何微操，仅通过配置初始卡组和系统提示词（System Prompt）赋予 Agent “性格”与“战术思维”，随后交由本地环境进行全自动的黑箱推演。
 
@@ -41,7 +41,7 @@ system_prompt: "你要像个疯狗一样进攻！"
 
 ### 3. 发起挑战
 ```bash
-python -m clash_of_agents.cli.main fight TopPlayer_01 ./my_bot.yaml
+python -m leviathan_sandbox.cli.main fight TopPlayer_01 ./my_bot.yaml
 ```
 
 ### 4. 查看回放

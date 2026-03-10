@@ -4,7 +4,7 @@ import time
 from typing import List, Dict, Optional, Tuple, Any
 from abc import ABC, abstractmethod
 from pathlib import Path
-from clash_of_agents.core.protocol import GameState, Action
+from leviathan_sandbox.core.protocol import GameState, Action
 
 def load_game_rules():
     """Load game rules from prompts/game_rules.md"""

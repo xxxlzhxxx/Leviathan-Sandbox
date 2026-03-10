@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 from rich.console import Console
 from rich.progress import track
-from clash_of_agents.core.game import Game
-from clash_of_agents.core.agent import RandomAgent, ScriptedAgent, VolcAgent
+from leviathan_sandbox.core.game import Game
+from leviathan_sandbox.core.agent import RandomAgent, ScriptedAgent, VolcAgent
 
 app = typer.Typer()
 console = Console()

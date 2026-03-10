@@ -2,15 +2,15 @@ import json
 import random
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, asdict
-from clash_of_agents.core.protocol import GameState, PlayerState, EntityState, Action
-from clash_of_agents.core.objects.base_entity import Entity, Unit, Building
-from clash_of_agents.core.objects.base.entity import Base
-from clash_of_agents.core.objects.knight.entity import Knight
-from clash_of_agents.core.objects.archer.entity import Archer
-from clash_of_agents.core.objects.goblin.entity import Goblin
-from clash_of_agents.core.objects.orc.entity import Orc
-from clash_of_agents.core.objects.wall.entity import Wall
-from clash_of_agents.core.objects.turret.entity import Turret
+from leviathan_sandbox.core.protocol import GameState, PlayerState, EntityState, Action
+from leviathan_sandbox.core.objects.base_entity import Entity, Unit, Building
+from leviathan_sandbox.core.objects.base.entity import Base
+from leviathan_sandbox.core.objects.knight.entity import Knight
+from leviathan_sandbox.core.objects.archer.entity import Archer
+from leviathan_sandbox.core.objects.goblin.entity import Goblin
+from leviathan_sandbox.core.objects.orc.entity import Orc
+from leviathan_sandbox.core.objects.wall.entity import Wall
+from leviathan_sandbox.core.objects.turret.entity import Turret
 
 # Constants
 GRID_WIDTH = 20  # X axis: 0-9 (Blue), 10-19 (Red)

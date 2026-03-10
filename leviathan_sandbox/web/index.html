@@ -3,51 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clash-of-Agents - Replay Viewer</title>
+    <title>Leviathan Sandbox - Replay Viewer</title>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #222;
-            color: #eee;
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
             display: flex;
             flex-direction: column;
             align-items: center;
+            margin: 0;
             padding: 20px;
         }
-        h1 { margin-bottom: 20px; }
-        .container {
-            background: #333;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        h1 {
+            color: #569cd6;
         }
-        canvas {
-            border: 2px solid #555;
-            background-color: #4CAF50; /* Grass green */
-            cursor: crosshair;
-        }
-        .controls {
-            margin-top: 15px;
+        #controls {
+            margin-bottom: 20px;
             display: flex;
             gap: 10px;
             align-items: center;
-            justify-content: center;
         }
-        button {
-            padding: 8px 16px;
-            background: #007bff;
-            border: none;
+        #fileInput {
+            display: none;
+        }
+        .btn {
+            background-color: #0e639c;
             color: white;
-            border-radius: 4px;
+            padding: 8px 16px;
+            border: none;
             cursor: pointer;
+            font-size: 14px;
         }
-        button:hover { background: #0056b3; }
-        input[type="range"] { width: 400px; }
-        #status { margin-bottom: 10px; color: #aaa; }
+        .btn:hover {
+            background-color: #1177bb;
+        }
+        #canvas-container {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        canvas {
+            background-color: #252526;
+            border: 1px solid #3c3c3c;
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 18px;
+        }
+        .legend {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #3c3c3c;
+            background-color: #252526;
+            text-align: left;
+            font-size: 14px;
+        }
+        .legend span {
+            margin-right: 15px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
-    <h1>🤖 Clash-of-Agents - Replay Viewer</h1>
+    <h1>Leviathan Sandbox (利维坦沙箱) <small>Replay Viewer</small></h1>
     
     <div class="container">
         <div id="status">Select a replay.json file to watch the battle.</div>
