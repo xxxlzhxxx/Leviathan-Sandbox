@@ -69,7 +69,8 @@
     
     <div class="container">
         <div id="status">Select a replay.json file to watch the battle.</div>
-        <input type="file" id="fileInput" accept=".json" style="margin-bottom: 15px;">
+        <button class="btn" onclick="document.getElementById('fileInput').click()" style="margin-bottom: 15px;">📂 Select Replay File</button>
+        <input type="file" id="fileInput" accept=".json">
         
         <div>
             <canvas id="gameCanvas" width="800" height="400"></canvas>
@@ -108,7 +109,7 @@
         let currentTick = 0;
         let isPlaying = false;
         let animationId = null;
-        const FPS = 10; // Slowed down from 30 to 10 for better visibility
+        const FPS = 2; // Slowed down from 30 to 2 for better visibility
 
         // Grid Config
         const GRID_W = 20;
@@ -223,55 +224,97 @@
 
             const state = replayData.ticks[tickIndex];
 
-            // Draw Entities
+            // Group entities by position for stacking visualization
+            const entityMap = {};
             state.entities.forEach(e => {
-                // Calculate position based on grid
-                const x = e.x * COL_WIDTH;
-                const y = e.y * LANE_HEIGHT;
-                const w = e.width * COL_WIDTH;
-                const h = e.height * LANE_HEIGHT;
+                const key = `${e.x},${e.y}`;
+                if (!entityMap[key]) entityMap[key] = [];
+                entityMap[key].push(e);
+            });
+
+            // Draw Entities
+            // We iterate keys to handle stacking
+            Object.keys(entityMap).forEach(key => {
+                const stack = entityMap[key];
+                // Sort stack by type: buildings bottom, units top?
+                // Or just iterate.
                 
-                // Color
-                let color = e.team === 'blue' ? '#4488ff' : '#ff4444';
-                if (e.type === 'base') color = e.team === 'blue' ? '#000088' : '#880000';
-                if (e.type === 'building' && e.function === 'defense') color = '#888';
+                stack.forEach((e, index) => {
+                    // Offset for stacking visualization if > 1 unit
+                    // Only offset UNITS, buildings stay fixed?
+                    // Let's just offset everything slightly based on index
+                    const offset = (stack.length > 1) ? (index * 5) - ((stack.length-1)*2.5) : 0;
+                    
+                    // Calculate position based on grid
+                    const COL_WIDTH = CANVAS_W / GRID_W;
+                    const LANE_HEIGHT = CANVAS_H / GRID_H;
+                    
+                    const x = e.x * COL_WIDTH + offset;
+                    const y = e.y * LANE_HEIGHT + offset;
+                    const w = e.width * COL_WIDTH;
+                    const h = e.height * LANE_HEIGHT;
+                    
+                    // Color
+                    let color = e.team === 'blue' ? '#4488ff' : '#ff4444';
+                    if (e.type === 'base') color = e.team === 'blue' ? '#000088' : '#880000';
+                    if (e.type === 'building' && e.function === 'defense') color = '#888';
+                    
+                    ctx.fillStyle = color;
+                    
+                    if (e.type === 'unit') {
+                         // Draw Circle for units
+                         ctx.beginPath();
+                         ctx.arc(x + w/2, y + h/2, Math.min(w,h) * 0.3, 0, Math.PI * 2);
+                         ctx.fill();
+                         ctx.strokeStyle = '#fff';
+                         ctx.stroke();
+                    } else {
+                        // Draw Rect for buildings
+                        ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+                        ctx.strokeStyle = '#fff';
+                        ctx.strokeRect(x+2, y+2, w-4, h-4);
+                    }
+                    
+                    // HP Bar (Below the unit now)
+                    const hpPct = Math.max(0, e.hp / e.max_hp);
+                    const barY = y + h + 2; // Position below the unit
+                    
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(x, barY, w, 4);
+                    ctx.fillStyle = hpPct > 0.5 ? '#0f0' : '#f00';
+                    ctx.fillRect(x, barY, w * hpPct, 4);
+                    
+                    // Label (Type)
+                    if (e.type !== 'base') {
+                         ctx.fillStyle = '#fff';
+                         ctx.font = 'bold 12px Arial';
+                         ctx.textAlign = 'center';
+                         ctx.textBaseline = 'middle';
+                         
+                         const charMap = {
+                             "knight": "K", "archer": "A", "goblin": "G", "orc": "O",
+                             "wall": "W", "turret": "T"
+                         };
+                         let char = charMap[e.subtype] || "?";
+                         
+                         // If stack > 1, show stack count on top unit?
+                         // Or just let them overlap
+                         ctx.fillText(char, x + w/2, y + h/2);
+                    }
+                });
                 
-                ctx.fillStyle = color;
-                
-                if (e.type === 'unit') {
-                     // Draw Circle for units
-                     ctx.beginPath();
-                     ctx.arc(x + w/2, y + h/2, Math.min(w,h) * 0.3, 0, Math.PI * 2);
-                     ctx.fill();
-                     ctx.strokeStyle = '#fff';
-                     ctx.stroke();
-                } else {
-                    // Draw Rect for buildings
-                    ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
-                    ctx.strokeStyle = '#fff';
-                    ctx.strokeRect(x+2, y+2, w-4, h-4);
-                }
-                
-                // HP Bar
-                const hpPct = Math.max(0, e.hp / e.max_hp);
-                ctx.fillStyle = '#333';
-                ctx.fillRect(x, y - 6, w, 4);
-                ctx.fillStyle = hpPct > 0.5 ? '#0f0' : '#f00';
-                ctx.fillRect(x, y - 6, w * hpPct, 4);
-                
-                // Label (Type)
-                if (e.type !== 'base') {
-                     ctx.fillStyle = '#fff';
-                     ctx.font = 'bold 12px Arial';
-                     ctx.textAlign = 'center';
-                     ctx.textBaseline = 'middle';
-                     // Map subtype to char
-                     const charMap = {
-                         "knight": "K", "archer": "A", "goblin": "G", "orc": "O",
-                         "wall": "W", "turret": "T"
-                     };
-                     const char = charMap[e.subtype] || "?";
-                     ctx.fillText(char, x + w/2, y + h/2);
+                // Stack Count Indicator
+                if (stack.length > 1) {
+                     const e = stack[0]; // Use first for position reference
+                     const COL_WIDTH = CANVAS_W / GRID_W;
+                     const LANE_HEIGHT = CANVAS_H / GRID_H;
+                     const x = e.x * COL_WIDTH;
+                     const y = e.y * LANE_HEIGHT;
+                     
+                     ctx.fillStyle = 'white';
+                     ctx.font = 'bold 14px Arial';
+                     ctx.textAlign = 'right';
+                     ctx.fillText(`x${stack.length}`, x + COL_WIDTH - 5, y + LANE_HEIGHT - 5);
                 }
             });
             

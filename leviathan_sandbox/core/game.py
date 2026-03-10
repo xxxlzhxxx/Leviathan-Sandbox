@@ -17,11 +17,12 @@ GRID_WIDTH = 20  # X axis: 0-9 (Blue), 10-19 (Red)
 GRID_HEIGHT = 3  # Y axis: 0-2 (Three Lanes)
 INITIAL_MANA = 100 # Total resources per player for the whole match
 BASE_HP = 500    # Lower HP for faster games (was 3000)
-BASE_DECAY = 1   # HP loss per DECAY_INTERVAL
-DECAY_INTERVAL = 5 # Ticks between decay
+BASE_DECAY = 5   # HP loss per DECAY_INTERVAL
+DECAY_INTERVAL = 10 # Ticks between decay
 TICK_RATE = 10
 GAME_DURATION = 200 # 200 ticks max (20 seconds)
 MANA_REGEN = 0.5 # Mana per turn
+SUDDEN_DEATH_START = 150 # Start sudden death at tick 150
 
 @dataclass
 class Player:
@@ -198,10 +199,15 @@ class Game:
             
         return False
 
-    def _is_occupied(self, x: int, y: int, width: int = 1, height: int = 1, exclude_id: str = None) -> bool:
+    def _is_occupied(self, x: int, y: int, width: int = 1, height: int = 1, exclude_id: str = None, ignore_team: str = None) -> bool:
         for e in self.entities:
             if e.id == exclude_id or e.hp <= 0:
                 continue
+            
+            # Allow units to overlap with ANY friendly entity (units or buildings)
+            if ignore_team and e.team == ignore_team:
+                continue
+
             # Check overlap
             if (x < e.x + e.width and x + width > e.x and
                 y < e.y + e.height and y + height > e.y):
@@ -227,7 +233,7 @@ class Game:
         if not (0 <= spawn_y < GRID_HEIGHT):
             return False
             
-        if self._is_occupied(spawn_x, spawn_y):
+        if self._is_occupied(spawn_x, spawn_y, ignore_team=team):
             return False
 
         player.mana -= cost
@@ -300,9 +306,12 @@ class Game:
         self.tick += 1
         
         # 0. Base Decay & Mana Regen
+        is_sudden_death = self.tick >= SUDDEN_DEATH_START
+        current_decay = BASE_DECAY * 5 if is_sudden_death else BASE_DECAY
+
         for p in self.players.values():
             if self.tick % DECAY_INTERVAL == 0:
-                p.base.hp -= BASE_DECAY
+                p.base.hp -= current_decay
             
             p.mana = min(p.mana + MANA_REGEN, 10.0) # Cap at 10
             if p.base.hp <= 0:
@@ -369,7 +378,7 @@ class Game:
                 # Check bounds
                 if 0 <= next_x < GRID_WIDTH:
                     # Check collision with ANY entity (friend or foe)
-                    if not self._is_occupied(next_x, next_y, exclude_id=attacker.id):
+                    if not self._is_occupied(next_x, next_y, exclude_id=attacker.id, ignore_team=attacker.team):
                         attacker.x = next_x
                         attacker.y = next_y
                         attacker.last_move_tick = self.tick
