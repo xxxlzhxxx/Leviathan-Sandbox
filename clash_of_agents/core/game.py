@@ -3,6 +3,14 @@ import random
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, asdict
 from clash_of_agents.core.protocol import GameState, PlayerState, EntityState, Action
+from clash_of_agents.core.objects.base_entity import Entity, Unit, Building
+from clash_of_agents.core.objects.base.entity import Base
+from clash_of_agents.core.objects.knight.entity import Knight
+from clash_of_agents.core.objects.archer.entity import Archer
+from clash_of_agents.core.objects.goblin.entity import Goblin
+from clash_of_agents.core.objects.orc.entity import Orc
+from clash_of_agents.core.objects.wall.entity import Wall
+from clash_of_agents.core.objects.turret.entity import Turret
 
 # Constants
 GRID_WIDTH = 20  # X axis: 0-9 (Blue), 10-19 (Red)
@@ -12,33 +20,8 @@ BASE_HP = 500    # Lower HP for faster games (was 3000)
 BASE_DECAY = 1   # HP loss per DECAY_INTERVAL
 DECAY_INTERVAL = 5 # Ticks between decay
 TICK_RATE = 10
-GAME_DURATION = 300 # 30 seconds max (was 600)
+GAME_DURATION = 200 # 200 ticks max (20 seconds)
 MANA_REGEN = 0.5 # Mana per turn
-
-@dataclass
-class Entity:
-    id: str
-    team: str  # "blue" or "red"
-    hp: int
-    max_hp: int
-    x: int
-    y: int
-    width: int
-    height: int
-    type: str # "base", "unit", "building"
-    subtype: str = "unknown"
-
-@dataclass
-class Unit(Entity):
-    damage: int = 0
-    range: int = 0
-    move_speed: int = 1 # ticks per move (1 = move every tick, 2 = every other tick)
-    last_move_tick: int = 0
-    target_id: Optional[str] = None
-
-@dataclass
-class Building(Entity):
-    function: str = "defense" # "base", "defense", "production"
 
 @dataclass
 class Player:
@@ -56,33 +39,9 @@ class Game:
         
         # Initialize Bases
         # Blue Base: x=0, y=0-2 (3x1)
-        blue_base = Building(
-            id="blue_base",
-            team="blue",
-            hp=BASE_HP,
-            max_hp=BASE_HP,
-            x=0,
-            y=0,
-            width=1,
-            height=3,
-            type="base",
-            subtype="base",
-            function="base"
-        )
+        blue_base = Base(id="blue_base", team="blue", x=0, y=0, hp=BASE_HP)
         # Red Base: x=19, y=0-2 (3x1)
-        red_base = Building(
-            id="red_base",
-            team="red",
-            hp=BASE_HP,
-            max_hp=BASE_HP,
-            x=GRID_WIDTH - 1,
-            y=0,
-            width=1,
-            height=3,
-            type="base",
-            subtype="base",
-            function="base"
-        )
+        red_base = Base(id="red_base", team="red", x=GRID_WIDTH - 1, y=0, hp=BASE_HP)
         
         self.entities.append(blue_base)
         self.entities.append(red_base)
@@ -273,32 +232,23 @@ class Game:
 
         player.mana -= cost
         
-        # Stats
-        stats = {
-            "knight": {"hp": 150, "damage": 15, "range": 1, "speed": 2},
-            "archer": {"hp": 60, "damage": 10, "range": 3, "speed": 2},
-            "goblin": {"hp": 40, "damage": 8, "range": 1, "speed": 1}, # Fast
-            "orc": {"hp": 200, "damage": 20, "range": 1, "speed": 3}, # Slow
-        }
-        s = stats.get(unit_type, stats["knight"])
+        # Instantiate correct class
+        unit_id = f"{team}_u_{self.tick}_{random.randint(1000,9999)}"
+        unit = None
         
-        unit = Unit(
-            id=f"{team}_u_{self.tick}_{random.randint(1000,9999)}",
-            team=team,
-            hp=s["hp"],
-            max_hp=s["hp"],
-            x=spawn_x,
-            y=spawn_y,
-            width=1,
-            height=1,
-            type="unit",
-            subtype=unit_type,
-            damage=s["damage"],
-            range=s["range"],
-            move_speed=s["speed"]
-        )
-        self.entities.append(unit)
-        return True
+        if unit_type == "knight":
+            unit = Knight(id=unit_id, team=team, x=spawn_x, y=spawn_y)
+        elif unit_type == "archer":
+            unit = Archer(id=unit_id, team=team, x=spawn_x, y=spawn_y)
+        elif unit_type == "goblin":
+            unit = Goblin(id=unit_id, team=team, x=spawn_x, y=spawn_y)
+        elif unit_type == "orc":
+            unit = Orc(id=unit_id, team=team, x=spawn_x, y=spawn_y)
+            
+        if unit:
+            self.entities.append(unit)
+            return True
+        return False
 
     def build_structure(self, team: str, building_type: str, x: int, y: int):
         """Builds a structure. Validates placement area."""
@@ -328,27 +278,19 @@ class Game:
             
         player.mana -= cost
         
-        stats = {
-            "wall": {"hp": 300, "function": "defense"},
-            "turret": {"hp": 100, "function": "attack"} # Turret not fully implemented yet
-        }
-        s = stats.get(building_type, stats["wall"])
+        # Instantiate correct class
+        build_id = f"{team}_b_{self.tick}_{random.randint(1000,9999)}"
+        building = None
         
-        building = Building(
-            id=f"{team}_b_{self.tick}_{random.randint(1000,9999)}",
-            team=team,
-            hp=s["hp"],
-            max_hp=s["hp"],
-            x=x,
-            y=y,
-            width=1,
-            height=1,
-            type="building",
-            subtype=building_type,
-            function=s["function"]
-        )
-        self.entities.append(building)
-        return True
+        if building_type == "wall":
+            building = Wall(id=build_id, team=team, x=x, y=y)
+        elif building_type == "turret":
+            building = Turret(id=build_id, team=team, x=x, y=y)
+            
+        if building:
+            self.entities.append(building)
+            return True
+        return False
 
     def run_tick(self):
         from copy import deepcopy
@@ -369,49 +311,68 @@ class Game:
         # 1. AI Logic (Handled externally via process_action now)
         # But units still need to move/attack automatically (Engine Logic)
         
-        # 2. Unit Logic
-        units = [e for e in self.entities if e.type == "unit" and e.hp > 0]
+        # 2. Unit & Building Logic (Combat)
+        # Turrets and Units can attack.
+        # Filter attackers: Units + Buildings with 'attack' function
+        attackers = [e for e in self.entities if (e.type == "unit" or (e.type == "building" and getattr(e, 'function', '') == 'attack')) and e.hp > 0]
         
-        for unit in units:
-            # Check move speed
-            if (self.tick - unit.last_move_tick) < unit.move_speed:
+        for attacker in attackers:
+            # Check attack cooldown / move speed
+            # For buildings, move_speed could be re-interpreted as attack_speed (ticks per attack)
+            speed = getattr(attacker, 'move_speed', 1)
+            # Default speed 1 if not set
+            if speed < 1: speed = 1
+            
+            if (self.tick - getattr(attacker, 'last_move_tick', 0)) < speed:
                 continue 
             
             # Find target
-            enemies = [e for e in self.entities if e.team != unit.team and e.hp > 0]
+            enemies = [e for e in self.entities if e.team != attacker.team and e.hp > 0]
             target = None
             min_dist = 999
             
-            # Forward direction
-            dx_dir = 1 if unit.team == "blue" else -1
+            # Forward direction (only for movement)
+            dx_dir = 1 if attacker.team == "blue" else -1
             
             # Check for enemies in attack range
+            attack_range = getattr(attacker, 'range', 0)
+            # Some buildings might not have range attribute set in base_entity, check subclass
+            if attacker.type == "building" and not hasattr(attacker, 'range'):
+                 # Turret defaults? Should be in entity definition.
+                 # Let's assume 3 if missing for safety
+                 attack_range = 3
+            
             for e in enemies:
-                # Closest point on entity e to unit
-                ex_closest = max(e.x, min(unit.x, e.x + e.width - 1))
-                ey_closest = max(e.y, min(unit.y, e.y + e.height - 1))
+                # Closest point on entity e to attacker
+                ex_closest = max(e.x, min(attacker.x, e.x + e.width - 1))
+                ey_closest = max(e.y, min(attacker.y, e.y + e.height - 1))
                 
-                dist = abs(ex_closest - unit.x) + abs(ey_closest - unit.y)
-                if dist <= unit.range:
+                dist = abs(ex_closest - attacker.x) + abs(ey_closest - attacker.y)
+                if dist <= attack_range:
                     if dist < min_dist:
                         min_dist = dist
                         target = e
             
             if target:
                 # Attack
-                target.hp -= unit.damage
-            else:
-                # Move
-                next_x = unit.x + dx_dir
-                next_y = unit.y # Stay in lane usually
+                damage = getattr(attacker, 'damage', 0)
+                # Turret damage fix
+                if attacker.type == "building" and damage == 0: damage = 5 # Fallback
+                
+                target.hp -= damage
+                attacker.last_move_tick = self.tick # Reset cooldown
+            elif attacker.type == "unit":
+                # Move (Only units move)
+                next_x = attacker.x + dx_dir
+                next_y = attacker.y # Stay in lane usually
                 
                 # Check bounds
                 if 0 <= next_x < GRID_WIDTH:
                     # Check collision with ANY entity (friend or foe)
-                    if not self._is_occupied(next_x, next_y, exclude_id=unit.id):
-                        unit.x = next_x
-                        unit.y = next_y
-                        unit.last_move_tick = self.tick
+                    if not self._is_occupied(next_x, next_y, exclude_id=attacker.id):
+                        attacker.x = next_x
+                        attacker.y = next_y
+                        attacker.last_move_tick = self.tick
                     else:
                         pass # Blocked
 

@@ -63,7 +63,16 @@
             <input type="range" id="timeline" min="0" max="0" value="0">
             <span id="tickDisplay">Tick: 0</span>
         </div>
-        <div style="margin-top: 10px; font-size: 0.9em; color: #888;">
+        <div style="margin-top: 10px; font-size: 0.9em; color: #888; text-align: center;">
+            <strong>Legend:</strong> 
+            <span style="color: #4488ff;">K</span>=Knight 
+            <span style="color: #4488ff;">A</span>=Archer 
+            <span style="color: #4488ff;">G</span>=Goblin 
+            <span style="color: #4488ff;">O</span>=Orc |
+            <span style="color: #888;">W</span>=Wall 
+            <span style="color: #888;">T</span>=Turret
+        </div>
+        <div style="margin-top: 5px; font-size: 0.9em; color: #888;">
             Blue Base (Left) vs Red Base (Right)
         </div>
     </div>
@@ -232,11 +241,19 @@
                 ctx.fillStyle = hpPct > 0.5 ? '#0f0' : '#f00';
                 ctx.fillRect(x, y - 6, w * hpPct, 4);
                 
-                // Label
+                // Label (Type)
                 if (e.type !== 'base') {
-                     // ctx.fillStyle = '#fff';
-                     // ctx.font = '10px Arial';
-                     // ctx.fillText(e.type[0].toUpperCase(), x + w/2 - 3, y + h/2 + 3);
+                     ctx.fillStyle = '#fff';
+                     ctx.font = 'bold 12px Arial';
+                     ctx.textAlign = 'center';
+                     ctx.textBaseline = 'middle';
+                     // Map subtype to char
+                     const charMap = {
+                         "knight": "K", "archer": "A", "goblin": "G", "orc": "O",
+                         "wall": "W", "turret": "T"
+                     };
+                     const char = charMap[e.subtype] || "?";
+                     ctx.fillText(char, x + w/2, y + h/2);
                 }
             });
             

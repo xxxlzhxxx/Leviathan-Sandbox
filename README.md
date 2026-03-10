@@ -1,5 +1,7 @@
 # Clash-of-Agents (CoA) 🤖
 
+![Demo / Screenshot](example1.png)
+
 [English](#english) | [中文](#chinese)
 
 ---
