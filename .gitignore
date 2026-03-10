@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Project Specific
+replays/*.json
+!replays/.gitkeep
+strategies/*.yaml
+!strategies/my_bot.yaml
+!strategies/example_bot.yaml
+
+# Sensitive Data
+*.log
+.DS_Store

@@ -1,0 +1,6 @@
+api_key: sk-placeholder
+deck:
+- knight
+- archer
+name: my_bot
+system_prompt: You are a strategic genius.
