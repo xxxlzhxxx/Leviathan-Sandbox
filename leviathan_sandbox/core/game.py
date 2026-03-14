@@ -96,6 +96,8 @@ class Game:
             damage = getattr(e, 'damage', 0)
             range_val = getattr(e, 'range', 0)
             speed = getattr(e, 'move_speed', 0)
+            action_state = getattr(e, 'action_state', 'idle')
+            target_id = getattr(e, 'target_id', None)
             
             es = EntityState(
                 id=e.id,
@@ -110,7 +112,9 @@ class Game:
                 height=e.height,
                 damage=damage,
                 range=range_val,
-                move_speed=speed
+                move_speed=speed,
+                action_state=action_state,
+                target_id=target_id
             )
             entity_states.append(es)
             
@@ -213,14 +217,14 @@ class Game:
         default_x = 3.0 if team == "blue" else float(GRID_WIDTH - 4)
         spawn_x = default_x
         
-        # Allow spawning anywhere in own territory (half map)
-        # Blue: [0, 12)
-        # Red: [12, 24)
+        # Allow spawning near base (Home Zone)
+        # Blue: [0, 8)
+        # Red: [16, 24)
         if x is not None:
             if team == "blue":
-                if 0 <= x < (GRID_WIDTH / 2): spawn_x = float(x)
+                if 0 <= x < 8: spawn_x = float(x)
             else:
-                if (GRID_WIDTH / 2) <= x < GRID_WIDTH: spawn_x = float(x)
+                if (GRID_WIDTH - 8) <= x < GRID_WIDTH: spawn_x = float(x)
         
         spawn_y = float(lane)
         if not (0 <= spawn_y < GRID_HEIGHT): return False
@@ -250,11 +254,11 @@ class Game:
     def build_structure(self, team: str, building_type: str, x: int, y: int):
         player = self.players[team]
         valid_zone = False
-        # Fix: Build zone must not block spawn points (x=3 and x=16)
-        # Blue Spawn=3. Build Zone: 4-8
-        # Red Spawn=16. Build Zone: 11-15 (left of spawn)
+        # Build Zone (Defensive Area)
+        # Blue: 4-8 (Base 0-3)
+        # Red: 16-20 (Base 21-24)
         if team == "blue" and 4 <= x <= 8: valid_zone = True
-        elif team == "red" and (GRID_WIDTH - 13) <= x <= (GRID_WIDTH - 9): valid_zone = True
+        elif team == "red" and (GRID_WIDTH - 8) <= x <= (GRID_WIDTH - 4): valid_zone = True
         if not valid_zone: return False
         
         costs = {"wall": 2, "turret": 5}
@@ -348,6 +352,7 @@ class Game:
 
         # Process Units (Move & Attack)
         for unit in active_units:
+            unit.action_state = "idle" # Reset state
             target_pos = None
             target_unit = None
             intent = "idle"
@@ -431,15 +436,23 @@ class Game:
                         
                         target_unit.hp -= damage
                         unit.last_attack_tick = self.tick_count
+                        unit.action_state = "attack"
+                        unit.target_id = target_unit.id
                         
                         if target_unit.hp <= 0:
                              self.players[unit.team].mana = min(self.players[unit.team].mana + 1.0, 10.0)
                 else:
                     # Move towards target
+                    prev_x, prev_y = unit.x, unit.y
                     self._move_towards(unit, target_unit.x, target_unit.y, speed)
+                    if unit.x != prev_x or unit.y != prev_y:
+                        unit.action_state = "move"
             
             elif intent == "move" and target_pos:
+                prev_x, prev_y = unit.x, unit.y
                 reached = self._move_towards(unit, target_pos[0], target_pos[1], speed)
+                if unit.x != prev_x or unit.y != prev_y:
+                    unit.action_state = "move"
                 if reached and unit.command:
                     unit.command = None
 

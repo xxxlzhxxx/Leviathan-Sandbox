@@ -54,6 +54,8 @@ class EntityState(BaseModel):
     range: int = 0
     move_speed: float = 0
     is_frozen: bool = False # Future proofing
+    action_state: str = "idle" # idle, move, attack
+    target_id: Optional[str] = None # ID of the target being attacked
 
 class PlayerState(BaseModel):
     team: str
