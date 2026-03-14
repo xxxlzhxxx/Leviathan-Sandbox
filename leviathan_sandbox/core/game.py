@@ -276,10 +276,16 @@ class Game:
             return True
         return False
 
-    def _is_occupied_float(self, x: float, y: int, width: int = 1, height: int = 1, exclude_id: str = None, ignore_team: str = None) -> bool:
+    def _is_occupied_float(self, x: float, y: int, width: int = 1, height: int = 1, exclude_id: str = None, ignore_team: str = None, pass_friendly_units: bool = False, mover_team: str = None) -> bool:
         for e in self.entities:
             if e.id == exclude_id or e.hp <= 0: continue
             if ignore_team and e.team == ignore_team: continue
+            
+            # Friendly Unit Pass-through Logic
+            if pass_friendly_units and mover_team:
+                if e.team == mover_team and e.type == "unit":
+                    continue # Pass through friendly units
+            
             if (x < e.x + e.width and x + width > e.x and
                 y < e.y + e.height and y + height > e.y):
                 return True
@@ -298,7 +304,7 @@ class Game:
         if dist <= delta:
             # Reached (or overshot, just snap)
             # Check collision at target
-            if not self._is_occupied_float(tx, ty, entity.width, entity.height, exclude_id=entity.id):
+            if not self._is_occupied_float(tx, ty, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
                 entity.x = tx
                 entity.y = ty
                 return True
@@ -310,7 +316,7 @@ class Game:
         
         # Check collision
         if 0 <= next_x < GRID_WIDTH and 0 <= next_y < GRID_HEIGHT:
-             if not self._is_occupied_float(next_x, next_y, entity.width, entity.height, exclude_id=entity.id):
+             if not self._is_occupied_float(next_x, next_y, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
                  entity.x = next_x
                  entity.y = next_y
                  return False 
