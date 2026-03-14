@@ -23,8 +23,29 @@
 ## 4. Mechanics
 - **Mana**: You gain 0.5 Mana per turn (Cap 10). Spending mana is instant.
 - **Kill Bounty**: You gain +1 Mana immediately when one of your units kills an enemy unit or building.
-- **Sudden Death**: After tick 150, Bases decay 5x faster (25 HP per 10 ticks).
-- **Action**: Every turn you can perform ONE action:
+- **Action Format**: Every turn you MUST return a JSON object with a MACRO action and optional MICRO commands.
+  
+  **Macro Action** (Choose ONE):
   - `{"type": "spawn", "card_id": "knight", "y": 0}` (Spawn unit in lane 0)
   - `{"type": "build", "card_id": "wall", "x": 3, "y": 1}` (Build wall at 3,1)
   - `{"type": "pass", "card_id": "", "y": 0}` (Do nothing, save mana)
+
+  **Micro Commands** (Optional, Max 3 per turn):
+  You can override the default AI of your units by issuing commands. A unit will follow the command until completed or overridden.
+  If no command is given, the unit will automatically find the closest enemy or push towards the enemy base.
+  - `{"unit_id": "blue_u_12_345", "type": "move", "target_x": 5.0, "target_y": 1.0}`
+  - `{"unit_id": "blue_u_12_345", "type": "attack", "target_unit_id": "red_u_8_111"}`
+  - `{"unit_id": "blue_u_12_345", "type": "stop"}`
+
+  **Full JSON Example**:
+  ```json
+  {
+    "type": "spawn",
+    "card_id": "archer",
+    "y": 1,
+    "commands": [
+      {"unit_id": "blue_u_5_123", "type": "move", "target_x": 4.5, "target_y": 0.5},
+      {"unit_id": "blue_u_8_456", "type": "attack", "target_unit_id": "red_u_9_789"}
+    ]
+  }
+  ```

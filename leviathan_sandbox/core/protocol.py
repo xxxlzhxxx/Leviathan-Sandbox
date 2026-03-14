@@ -1,4 +1,5 @@
 from typing import List, Dict, Optional, Literal
+from enum import Enum
 from pydantic import BaseModel
 
 # --- Enums ---
@@ -18,10 +19,22 @@ class BuildingType(str):
     TURRET = "turret"
     BASE = "base"
 
-class ActionType(str):
+class ActionType(str, Enum):
     SPAWN = "spawn"
     BUILD = "build"
     PASS = "pass"
+
+class CommandType(str, Enum):
+    MOVE = "move"
+    ATTACK = "attack"
+    STOP = "stop"
+
+class UnitCommand(BaseModel):
+    unit_id: str
+    type: CommandType
+    target_x: Optional[float] = None
+    target_y: Optional[float] = None
+    target_unit_id: Optional[str] = None
 
 # --- State Models (Sent to Agent) ---
 
@@ -32,14 +45,14 @@ class EntityState(BaseModel):
     subtype: str # "knight", "wall", etc.
     hp: int
     max_hp: int
-    x: int
-    y: int
+    x: float
+    y: float # Changed to float for free movement
     width: int
     height: int
     # Optional dynamic stats
     damage: int = 0
     range: int = 0
-    move_speed: int = 0
+    move_speed: float = 0
     is_frozen: bool = False # Future proofing
 
 class PlayerState(BaseModel):
@@ -57,23 +70,19 @@ class GameState(BaseModel):
     map_height: int
     entities: List[EntityState]
     me: PlayerState
-    opponent: PlayerState
+    opponent: PlayerState # TODO: Hide mana/deck for Fog of War later
     
-    # New Fields for Grid & Diff
-    # 3x20 string array, e.g. [ "...", "K.G", "..." ]
-    # '.' = Empty, 'K' = Knight, 'G' = Goblin, etc.
     grid_view: List[str] 
-    
-    # Text description of changes since last turn
-    # e.g. ["Blue Knight moved to (2,1)", "Red Goblin spawned at (18,0)"]
     last_turn_changes: List[str]
 
 # --- Action Models (Received from Agent) ---
 
 class Action(BaseModel):
-    type: str # "spawn", "build", "pass"
-    card_id: str # e.g. "knight", "wall"
-    x: Optional[int] = None # For building
-    y: int # Lane index (0, 1, 2)
+    type: str = "pass" # "spawn", "build", "pass"
+    card_id: str = "" 
+    x: Optional[float] = None 
+    y: float = 0 
+    
+    commands: List[UnitCommand] = []
     
     # Validation helpers could go here
