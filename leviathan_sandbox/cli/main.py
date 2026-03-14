@@ -48,6 +48,69 @@ def list_opponents():
     
     console.print(table)
 
+def _get_sorted_replays():
+    """Helper to get sorted replays from disk."""
+    replay_dir = Path("replays")
+    if not replay_dir.exists():
+        return []
+    
+    files = list(replay_dir.glob("*.json"))
+    files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+    return files
+
+@app.command()
+def list_replays(limit: int = 10):
+    """List recent battle replays."""
+    from rich.table import Table
+    from datetime import datetime
+    
+    files = _get_sorted_replays()
+    if not files:
+        console.print("[yellow]No replays found in 'replays/' directory.[/yellow]")
+        return
+
+    table = Table(title=f"Recent Replays (Showing {min(limit, len(files))})")
+    table.add_column("ID", style="cyan", justify="right")
+    table.add_column("Date", style="blue")
+    table.add_column("File Name", style="magenta")
+    table.add_column("Video?", style="yellow")
+
+    for idx, f in enumerate(files[:limit]):
+        video_path = f.with_suffix(".mp4")
+        has_video = "Yes" if video_path.exists() else "No"
+        timestamp = datetime.fromtimestamp(f.stat().st_mtime).strftime('%Y-%m-%d %H:%M')
+        table.add_row(str(idx + 1), timestamp, f.name, has_video)
+
+    console.print(table)
+    console.print("\n[bold green]Agent Hint:[/bold green] Ask the user: [italic]'Which replay ID would you like to watch?'[/italic]")
+
+@app.command()
+def watch_replay(replay_id: int):
+    """Open a replay video by ID."""
+    files = _get_sorted_replays()
+    if replay_id < 1 or replay_id > len(files):
+        console.print(f"[red]Invalid Replay ID: {replay_id}[/red]")
+        return
+        
+    target_file = files[replay_id - 1]
+    video_path = target_file.with_suffix(".mp4")
+    
+    if video_path.exists():
+        console.print(f"[green]Opening video: {video_path}[/green]")
+        import subprocess
+        try:
+            if sys.platform == "darwin":
+                subprocess.call(["open", str(video_path)])
+            elif sys.platform == "win32":
+                os.startfile(str(video_path))
+            else:
+                subprocess.call(["xdg-open", str(video_path)])
+        except Exception as e:
+            console.print(f"[red]Failed to open video player: {e}[/red]")
+    else:
+        console.print(f"[yellow]Video not found for {target_file.name}.[/yellow]")
+        console.print(f"View in web viewer: http://localhost:8001/ -> Load 'replays/{target_file.name}'")
+
 @app.command()
 def battle(
     my_prompt: str = typer.Option(None, help="Your strategy prompt string"),

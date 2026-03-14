@@ -115,6 +115,19 @@ python3 -m http.server 8001
 ```
 Open [http://localhost:8001/](http://localhost:8001/) and load the `.json` file from the `replays/` folder.
 
+### 3. Manage Replays
+
+**List Recent Battles:**
+```bash
+leviathan-sandbox list-replays
+```
+
+**Watch a Replay:**
+Open the video (if available) or view in web browser by ID.
+```bash
+leviathan-sandbox watch-replay 1
+```
+
 ## 🛠️ Features
 
 ### Gameplay
