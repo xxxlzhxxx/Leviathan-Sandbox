@@ -208,7 +208,10 @@ class Game:
         cost = costs.get(unit_type, 3)
         if player.mana < cost: return False
             
-        spawn_x = 1.0 if team == "blue" else float(GRID_WIDTH - 2)
+        # Fix: Spawn outside base (Base width=3)
+        # Blue Base [0,3), Spawn at 3.0
+        # Red Base [17,20), Spawn at 16.0
+        spawn_x = 3.0 if team == "blue" else float(GRID_WIDTH - 4)
         spawn_y = float(lane)
         if not (0 <= spawn_y < GRID_HEIGHT): return False
             
@@ -237,8 +240,11 @@ class Game:
     def build_structure(self, team: str, building_type: str, x: int, y: int):
         player = self.players[team]
         valid_zone = False
-        if team == "blue" and 1 <= x <= 5: valid_zone = True
-        elif team == "red" and (GRID_WIDTH - 6) <= x <= (GRID_WIDTH - 2): valid_zone = True
+        # Fix: Build zone must not block spawn points (x=3 and x=16)
+        # Blue Spawn=3. Build Zone: 4-8
+        # Red Spawn=16. Build Zone: 11-15 (left of spawn)
+        if team == "blue" and 4 <= x <= 8: valid_zone = True
+        elif team == "red" and (GRID_WIDTH - 13) <= x <= (GRID_WIDTH - 9): valid_zone = True
         if not valid_zone: return False
         
         costs = {"wall": 2, "turret": 5}

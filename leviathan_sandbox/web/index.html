@@ -377,30 +377,13 @@
             const PLAY_AREA_W = 1200;
             const COL_WIDTH = PLAY_AREA_W / GRID_W;
 
-            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-            ctx.lineWidth = 1;
-            for (let y = 0; y <= GRID_H; y++) {
-                ctx.beginPath();
-                ctx.moveTo(0, y * LANE_HEIGHT);
-                ctx.lineTo(PLAY_AREA_W, y * LANE_HEIGHT);
-                ctx.stroke();
-            }
-            for (let x = 0; x <= GRID_W; x++) {
-                ctx.beginPath();
-                ctx.moveTo(x * COL_WIDTH, 0);
-                ctx.lineTo(x * COL_WIDTH, CANVAS_H);
-                ctx.stroke();
-            }
-
-            ctx.fillStyle = 'rgba(0, 0, 255, 0.1)';
-            ctx.fillRect(0, 0, COL_WIDTH * 3, CANVAS_H);
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
-            ctx.fillRect((GRID_W - 3) * COL_WIDTH, 0, COL_WIDTH * 3, CANVAS_H);
+            // Grid lines removed for cleaner look
             
+            // Draw Spawn Zones (Subtle)
             ctx.fillStyle = 'rgba(0, 0, 255, 0.05)';
-            ctx.fillRect(COL_WIDTH * 3, 0, COL_WIDTH * 4, CANVAS_H);
+            ctx.fillRect(0, 0, COL_WIDTH * 3, CANVAS_H);
             ctx.fillStyle = 'rgba(255, 0, 0, 0.05)';
-            ctx.fillRect((GRID_W - 7) * COL_WIDTH, 0, COL_WIDTH * 4, CANVAS_H);
+            ctx.fillRect((GRID_W - 3) * COL_WIDTH, 0, COL_WIDTH * 3, CANVAS_H);
 
             if (replayData && replayData.ticks[tickIndex]) {
                 const state = replayData.ticks[tickIndex];
@@ -560,15 +543,13 @@
                             barX = x + w + 5;
                         }
                         
-                        // HP Bar (only show when damaged)
-                        if (tookDamage) {
-                            ctx.fillStyle = '#333';
-                            ctx.fillRect(barX, y, barW, barH);
-                            
-                            const fillH = barH * hpPct;
-                            ctx.fillStyle = hpPct > 0.5 ? '#0f0' : '#f00';
-                            ctx.fillRect(barX, y + (barH - fillH), barW, fillH);
-                        }
+                        // HP Bar (Always visible for Base)
+                        ctx.fillStyle = '#333';
+                        ctx.fillRect(barX, y, barW, barH);
+                        
+                        const fillH = barH * hpPct;
+                        ctx.fillStyle = hpPct > 0.5 ? '#0f0' : '#f00';
+                        ctx.fillRect(barX, y + (barH - fillH), barW, fillH);
                         
                         // Mana Bar (always visible, no border)
                         const playerMana = state.players[e.team].mana;
