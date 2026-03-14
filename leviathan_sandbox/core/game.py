@@ -184,7 +184,8 @@ class Game:
             return True
             
         if action.type == "spawn":
-            return self.spawn_unit(team, action.card_id, action.y)
+            # Pass action.x (optional)
+            return self.spawn_unit(team, action.card_id, action.y, action.x)
             
         if action.type == "build":
             if action.x is None:
@@ -202,16 +203,25 @@ class Game:
                 return True
         return False
 
-    def spawn_unit(self, team: str, unit_type: str, lane: int):
+    def spawn_unit(self, team: str, unit_type: str, lane: int, x: float = None):
         player = self.players[team]
         costs = {"knight": 3, "archer": 4, "goblin": 2, "orc": 5, "catapult": 5}
         cost = costs.get(unit_type, 3)
         if player.mana < cost: return False
             
-        # Fix: Spawn outside base (Base width=3)
-        # Blue Base [0,3), Spawn at 3.0
-        # Red Base [17,20), Spawn at 16.0
-        spawn_x = 3.0 if team == "blue" else float(GRID_WIDTH - 4)
+        # Default spawn outside base
+        default_x = 3.0 if team == "blue" else float(GRID_WIDTH - 4)
+        spawn_x = default_x
+        
+        # Allow spawning anywhere in own territory (half map)
+        # Blue: [0, 12)
+        # Red: [12, 24)
+        if x is not None:
+            if team == "blue":
+                if 0 <= x < (GRID_WIDTH / 2): spawn_x = float(x)
+            else:
+                if (GRID_WIDTH / 2) <= x < GRID_WIDTH: spawn_x = float(x)
+        
         spawn_y = float(lane)
         if not (0 <= spawn_y < GRID_HEIGHT): return False
             
