@@ -95,7 +95,7 @@
         <input type="file" id="fileInput" accept=".json">
         
         <div>
-            <canvas id="gameCanvas" width="800" height="400"></canvas>
+            <canvas id="gameCanvas"></canvas>
         </div>
         
         <div class="controls">
@@ -104,15 +104,11 @@
             <input type="range" id="timeline" min="0" max="0" value="0">
             <span id="tickDisplay">Tick: 0</span>
         </div>
-        <div style="margin-top: 10px; font-size: 0.9em; color: #888; text-align: center;">
-            <strong data-i18n="legend">Legend:</strong> 
-            <span style="color: #4488ff;" data-i18n="unit_knight">K=Knight</span> 
-            <span style="color: #4488ff;" data-i18n="unit_archer">A=Archer</span> 
-            <span style="color: #4488ff;" data-i18n="unit_goblin">G=Goblin</span> 
-            <span style="color: #4488ff;" data-i18n="unit_orc">O=Orc</span> |
-            <span style="color: #888;" data-i18n="unit_wall">W=Wall</span> 
-            <span style="color: #888;" data-i18n="unit_turret">T=Turret</span>
+        
+        <div id="legend" style="margin-top: 10px; display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; color: #888; font-size: 14px;">
+            <!-- Legend will be populated by JS -->
         </div>
+
         <div style="margin-top: 5px; font-size: 0.9em; color: #888;" data-i18n="base_info">
             Blue Base (Left) vs Red Base (Right)
         </div>
@@ -130,12 +126,6 @@
                 btn_play: "▶ Play",
                 btn_pause: "⏸ Pause",
                 legend: "Legend:",
-                unit_knight: "K=Knight",
-                unit_archer: "A=Archer",
-                unit_goblin: "G=Goblin",
-                unit_orc: "O=Orc",
-                unit_wall: "W=Wall",
-                unit_turret: "T=Turret",
                 base_info: "Blue Base (Left) vs Red Base (Right)",
                 tick: "Tick:",
                 winner: "Winner:",
@@ -153,12 +143,6 @@
                 btn_play: "▶ 播放",
                 btn_pause: "⏸ 暂停",
                 legend: "图例:",
-                unit_knight: "K=骑士",
-                unit_archer: "A=弓箭手",
-                unit_goblin: "G=哥布林",
-                unit_orc: "O=兽人",
-                unit_wall: "W=城墙",
-                unit_turret: "T=防御塔",
                 base_info: "蓝方基地 (左) vs 红方基地 (右)",
                 tick: "时间步:",
                 winner: "获胜者:",
@@ -170,9 +154,11 @@
         };
 
         let currentLang = 'zh'; // Default to Chinese
+        let t = translations[currentLang];
 
         function setLanguage(lang) {
             currentLang = lang;
+            t = translations[lang];
             
             // Update UI Buttons
             document.getElementById('btn-en').classList.remove('active');
@@ -186,11 +172,40 @@
                     el.textContent = translations[lang][key];
                 }
             });
+            
+            updateLegend();
 
             // Trigger re-render to update dynamic text
             if (replayData) {
                 render(currentPlaybackTick);
             }
+        }
+
+        function updateLegend() {
+            const t = translations[currentLang];
+            const legendDiv = document.getElementById('legend');
+            legendDiv.innerHTML = `<strong style="margin-right: 10px; align-self: center;">${t.legend}</strong>`;
+            
+            const units = [
+                {name: 'knight', label_en: 'Knight', label_zh: '骑士'},
+                {name: 'archer', label_en: 'Archer', label_zh: '弓箭手'},
+                {name: 'goblin', label_en: 'Goblin', label_zh: '哥布林'},
+                {name: 'orc', label_en: 'Orc', label_zh: '兽人'},
+                {name: 'catapult', label_en: 'Catapult', label_zh: '投石车'},
+                {name: 'wall', label_en: 'Wall', label_zh: '城墙'},
+                {name: 'turret', label_en: 'Turret', label_zh: '防御塔'}
+            ];
+            
+            units.forEach(u => {
+                const label = currentLang === 'zh' ? u.label_zh : u.label_en;
+                const imgPath = `assets/${u.name}_blue.png`;
+                const item = document.createElement('div');
+                item.style.display = 'inline-flex';
+                item.style.alignItems = 'center';
+                item.style.marginRight = '15px';
+                item.innerHTML = `<img src="${imgPath}" height="24" style="margin-right:5px; vertical-align:middle; image-rendering: pixelated;"> <span>${label}</span>`;
+                legendDiv.appendChild(item);
+            });
         }
 
         const canvas = document.getElementById('gameCanvas');
@@ -512,6 +527,7 @@
                             barX = x + w + 5;
                         }
                         
+                        // HP Bar
                         ctx.fillStyle = '#333';
                         ctx.fillRect(barX, y, barW, barH);
                         
@@ -522,6 +538,27 @@
                         ctx.strokeStyle = '#fff';
                         ctx.lineWidth = 1;
                         ctx.strokeRect(barX, y, barW, barH);
+                        
+                        // Mana Bar
+                        const playerMana = currentState.players[e.team].mana;
+                        const manaPct = Math.min(playerMana / 10.0, 1.0);
+                        let manaX;
+                        
+                        if (e.team === 'blue') {
+                            manaX = barX - barW - 2;
+                        } else {
+                            manaX = barX + barW + 2;
+                        }
+                        
+                        ctx.fillStyle = '#333';
+                        ctx.fillRect(manaX, y, barW, barH);
+                        
+                        const manaFillH = barH * manaPct;
+                        ctx.fillStyle = '#4488ff';
+                        ctx.fillRect(manaX, y + (barH - manaFillH), barW, manaFillH);
+                        
+                        ctx.strokeStyle = '#fff';
+                        ctx.strokeRect(manaX, y, barW, barH);
                         
                     } else {
                         const barW = w - 4;
