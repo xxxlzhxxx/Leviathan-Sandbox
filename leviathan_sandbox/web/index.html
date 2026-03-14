@@ -94,6 +94,25 @@
         <button class="btn" onclick="document.getElementById('fileInput').click()" style="margin-bottom: 15px;" id="btn-select" data-i18n="btn_select">📂 Select Replay File</button>
         <input type="file" id="fileInput" accept=".json">
         
+        <!-- Game Stats Header -->
+        <div style="margin-bottom: 5px; display: flex; justify-content: space-between; align-items: flex-end; width: 100%; max-width: 1320px; background: #252526; padding: 10px; border: 1px solid #3c3c3c; border-bottom: none; box-sizing: border-box;">
+             <div style="color: #4488ff; text-align: left; min-width: 150px;">
+                 <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 5px;" data-i18n="blue_team">BLUE</div>
+                 <div style="font-size: 14px;"><span data-i18n="hp_label">HP:</span> <span id="blue-hp" style="font-weight: bold; font-size: 16px;">--</span></div>
+                 <div style="font-size: 14px;"><span data-i18n="mp_label">MP:</span> <span id="blue-mana" style="font-weight: bold; font-size: 16px;">--</span></div>
+             </div>
+             
+             <div style="text-align: center; flex-grow: 1; align-self: center;">
+                 <div id="winner-display" style="font-size: 24px; color: #ffeb3b; font-weight: bold; text-shadow: 0 0 10px rgba(255, 235, 59, 0.5);"></div>
+             </div>
+
+             <div style="color: #ff4444; text-align: right; min-width: 150px;">
+                 <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 5px;" data-i18n="red_team">RED</div>
+                 <div style="font-size: 14px;"><span data-i18n="hp_label">HP:</span> <span id="red-hp" style="font-weight: bold; font-size: 16px;">--</span></div>
+                 <div style="font-size: 14px;"><span data-i18n="mp_label">MP:</span> <span id="red-mana" style="font-weight: bold; font-size: 16px;">--</span></div>
+             </div>
+        </div>
+
         <div>
             <canvas id="gameCanvas"></canvas>
         </div>
@@ -132,6 +151,10 @@
                 blue_stats: "Blue HP:",
                 red_stats: "Red HP:",
                 mana: "Mana:",
+                blue_team: "BLUE TEAM",
+                red_team: "RED TEAM",
+                hp_label: "HP:",
+                mp_label: "MANA:",
                 draw: "DRAW"
             },
             zh: {
@@ -149,6 +172,10 @@
                 blue_stats: "蓝方血量:",
                 red_stats: "红方血量:",
                 mana: "魔法:",
+                blue_team: "蓝方",
+                red_team: "红方",
+                hp_label: "血量:",
+                mp_label: "法力:",
                 draw: "平局"
             }
         };
@@ -289,6 +316,15 @@
         playBtn.addEventListener('click', () => {
             if (!replayData) return;
             if (isPlaying) return;
+            
+            // Fix NaN
+            if (isNaN(currentPlaybackTick) || currentPlaybackTick < 0) {
+                currentPlaybackTick = 0;
+            }
+            if (currentPlaybackTick >= replayData.ticks.length - 1) {
+                currentPlaybackTick = 0;
+            }
+
             isPlaying = true;
             lastFrameTime = performance.now();
             loop();
@@ -579,21 +615,26 @@
 
             if (replayData && replayData.ticks[tickIndex]) {
                 const state = replayData.ticks[tickIndex];
-                ctx.fillStyle = '#fff';
-                ctx.font = '16px Arial';
-                ctx.textAlign = 'left';
-                const blueStats = `${t.blue_stats} ${state.players.blue.hp.toFixed(0)} | ${t.mana} ${state.players.blue.mana}`;
-                ctx.fillText(blueStats, 20, 30);
                 
-                ctx.textAlign = 'right';
-                const redStats = `${t.red_stats} ${state.players.red.hp.toFixed(0)} | ${t.mana} ${state.players.red.mana}`;
-                ctx.fillText(redStats, CANVAS_W - 20, 30);
+                // Update DOM Stats
+                const blueHp = state.players.blue.hp.toFixed(0);
+                const blueMana = state.players.blue.mana.toFixed(1);
+                document.getElementById('blue-hp').textContent = blueHp;
+                document.getElementById('blue-mana').textContent = blueMana;
                 
-                if (replayData.winner) {
-                     ctx.textAlign = 'center';
-                     ctx.font = '30px Arial';
+                const redHp = state.players.red.hp.toFixed(0);
+                const redMana = state.players.red.mana.toFixed(1);
+                document.getElementById('red-hp').textContent = redHp;
+                document.getElementById('red-mana').textContent = redMana;
+                
+                // Winner Display
+                const winnerDiv = document.getElementById('winner-display');
+                if (replayData.winner && tickIndex >= replayData.ticks.length - 1) {
                      const winnerText = replayData.winner === 'draw' ? t.draw : replayData.winner.toUpperCase();
-                     ctx.fillText(`${t.winner} ${winnerText}`, CANVAS_W/2, 50);
+                     winnerDiv.textContent = `${t.winner} ${winnerText}`;
+                     winnerDiv.style.display = 'block';
+                } else {
+                     winnerDiv.style.display = 'none';
                 }
             }
         }
