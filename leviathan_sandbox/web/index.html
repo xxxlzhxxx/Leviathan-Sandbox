@@ -496,19 +496,10 @@
                         if (isSpriteSheet) {
                              const sx = frameIndex * SPRITE_SIZE;
                              const sy = 0;
-                             // Assets are pre-flipped in pipeline. Blue=Right, Red=Left.
                              ctx.drawImage(img, sx, sy, SPRITE_SIZE, SPRITE_SIZE, x, y, w, h);
                         } else {
-                             // Static assets are also pre-flipped in pipeline now.
                              ctx.drawImage(img, x, y, w, h);
                         }
-                        ctx.restore();
-                        
-                        ctx.save();
-                        if (e.team === 'blue') ctx.strokeStyle = 'rgba(100, 200, 255, 0.5)';
-                        else ctx.strokeStyle = 'rgba(255, 100, 100, 0.5)';
-                        ctx.lineWidth = 2;
-                        ctx.strokeRect(x, y, w, h);
                         ctx.restore();
                         
                     } else {
@@ -551,6 +542,7 @@
                     }
                     
                     const hpPct = e.hp / e.max_hp;
+                    const tookDamage = nextE && nextE.hp < e.hp;
 
                     if (e.type === 'base') {
                         const barW = 10;
@@ -563,19 +555,17 @@
                             barX = x + w + 5;
                         }
                         
-                        // HP Bar
-                        ctx.fillStyle = '#333';
-                        ctx.fillRect(barX, y, barW, barH);
+                        // HP Bar (only show when damaged)
+                        if (tookDamage) {
+                            ctx.fillStyle = '#333';
+                            ctx.fillRect(barX, y, barW, barH);
+                            
+                            const fillH = barH * hpPct;
+                            ctx.fillStyle = hpPct > 0.5 ? '#0f0' : '#f00';
+                            ctx.fillRect(barX, y + (barH - fillH), barW, fillH);
+                        }
                         
-                        const fillH = barH * hpPct;
-                        ctx.fillStyle = hpPct > 0.5 ? '#0f0' : '#f00';
-                        ctx.fillRect(barX, y + (barH - fillH), barW, fillH);
-                        
-                        ctx.strokeStyle = '#fff';
-                        ctx.lineWidth = 1;
-                        ctx.strokeRect(barX, y, barW, barH);
-                        
-                        // Mana Bar
+                        // Mana Bar (always visible, no border)
                         const playerMana = state.players[e.team].mana;
                         const manaPct = Math.min(playerMana / 10.0, 1.0);
                         let manaX;
@@ -593,20 +583,20 @@
                         ctx.fillStyle = '#4488ff';
                         ctx.fillRect(manaX, y + (barH - manaFillH), barW, manaFillH);
                         
-                        ctx.strokeStyle = '#fff';
-                        ctx.strokeRect(manaX, y, barW, barH);
-                        
                     } else {
-                        const barW = w - 4;
-                        const barH = 4;
-                        const barX = x + 2;
-                        const barY = y + 2;
-                        
-                        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                        ctx.fillRect(barX, barY, barW, barH);
-                        
-                        ctx.fillStyle = hpPct > 0.5 ? 'rgba(0, 255, 0, 0.8)' : 'rgba(255, 0, 0, 0.8)';
-                        ctx.fillRect(barX, barY, barW * hpPct, barH);
+                        // Units: HP bar only when damaged
+                        if (tookDamage) {
+                            const barW = w - 4;
+                            const barH = 4;
+                            const barX = x + 2;
+                            const barY = y + 2;
+                            
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                            ctx.fillRect(barX, barY, barW, barH);
+                            
+                            ctx.fillStyle = hpPct > 0.5 ? 'rgba(0, 255, 0, 0.8)' : 'rgba(255, 0, 0, 0.8)';
+                            ctx.fillRect(barX, barY, barW * hpPct, barH);
+                        }
                     }
                 });
             }
