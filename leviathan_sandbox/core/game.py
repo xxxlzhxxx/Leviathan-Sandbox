@@ -286,14 +286,28 @@ class Game:
                 if e.team == mover_team and e.type == "unit":
                     continue # Pass through friendly units
             
-            if (x < e.x + e.width and x + width > e.x and
-                y < e.y + e.height and y + height > e.y):
+            # Shrink collision box slightly to prevent edge sticking
+            margin = 0.1
+            if (x + margin < e.x + e.width - margin and x + width - margin > e.x + margin and
+                y + margin < e.y + e.height - margin and y + height - margin > e.y + margin):
                 return True
         return False
 
     def _dist(self, e1, e2):
         import math
         return math.sqrt((e1.x - e2.x)**2 + (e1.y - e2.y)**2)
+
+    def _edge_dist(self, e1, e2):
+        import math
+        x_dist = 0
+        if e1.x + e1.width <= e2.x: x_dist = e2.x - (e1.x + e1.width)
+        elif e2.x + e2.width <= e1.x: x_dist = e1.x - (e2.x + e2.width)
+        
+        y_dist = 0
+        if e1.y + e1.height <= e2.y: y_dist = e2.y - (e1.y + e1.height)
+        elif e2.y + e2.height <= e1.y: y_dist = e1.y - (e2.y + e2.height)
+        
+        return math.sqrt(x_dist**2 + y_dist**2)
 
     def _move_towards(self, entity, tx, ty, delta):
         import math
@@ -313,33 +327,38 @@ class Game:
         next_x = entity.x + dx * ratio
         next_y = entity.y + dy * ratio
         
-        # Try Direct Move
+        # Try Direct Move (No Sliding)
         if 0 <= next_x < GRID_WIDTH and 0 <= next_y < GRID_HEIGHT:
              if not self._is_occupied_float(next_x, next_y, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
                  entity.x = next_x
                  entity.y = next_y
                  return False
-        
-        # Blocked! Try Sliding (Basic Obstacle Avoidance)
-        # If moving mostly Horizontal, try sliding Vertical
-        if abs(dx) > abs(dy): 
-            # Slide Y
-            for slide_dir in [1, -1]:
-                slide_y = entity.y + (delta * slide_dir)
-                if 0 <= slide_y < GRID_HEIGHT:
-                    if not self._is_occupied_float(entity.x, slide_y, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
-                        entity.y = slide_y
-                        return False
-        else:
-            # Slide X
-            for slide_dir in [1, -1]:
-                slide_x = entity.x + (delta * slide_dir)
-                if 0 <= slide_x < GRID_WIDTH:
-                    if not self._is_occupied_float(slide_x, entity.y, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
-                        entity.x = slide_x
-                        return False
                  
         return False
+
+    def _smart_move_or_attack(self, unit, target, speed, atk_range, atk_cooldown):
+        # 1. Attack Check
+        edge_dist = self._edge_dist(unit, target)
+        if edge_dist <= atk_range + 0.1:
+            if (self.tick_count - getattr(unit, 'last_attack_tick', 0)) >= atk_cooldown:
+                damage = getattr(unit, 'damage', 1)
+                bonus = getattr(unit, 'bonus_vs_building', 0)
+                if target.type in ["building", "base"]: damage += bonus
+                
+                target.hp -= damage
+                unit.last_attack_tick = self.tick_count
+                unit.action_state = "attack"
+                unit.target_id = target.id
+                if target.hp <= 0:
+                     self.players[unit.team].mana = min(self.players[unit.team].mana + 1.0, 10.0)
+            return
+
+        # 2. Move Check
+        prev_x, prev_y = unit.x, unit.y
+        self._move_towards(unit, target.x, target.y, speed)
+        
+        if unit.x != prev_x or unit.y != prev_y:
+            unit.action_state = "move"
 
     def run_tick(self):
         from copy import deepcopy
@@ -366,7 +385,7 @@ class Game:
             rng = getattr(b, 'range', 3)
             
             for e in enemies:
-                d = self._dist(b, e)
+                d = self._edge_dist(b, e)
                 if d <= rng and d < min_dist:
                     min_dist = d
                     target = e
@@ -403,20 +422,18 @@ class Game:
                     unit.command = None
                     continue
 
-            # B. Default AI (Smart Targeting)
+            # B. Default AI (Simple: Nearest Enemy)
             if not unit.command:
                 enemies = [e for e in self.entities if e.team != unit.team and e.hp > 0]
                 
-                # Priority: Units/Base > Buildings
-                high_value_targets = [e for e in enemies if e.type != "building" or e.subtype == "base"]
+                # Priority: Absolutely nearest enemy (Unit or Building)
                 closest = None
                 min_dist = 999
-                agro_range = 8.0
+                agro_range = 999.0 # Global agro (or large enough)
                 
-                # 1. Find High Value Target
-                for e in high_value_targets:
-                    d = self._dist(unit, e)
-                    if d <= agro_range and d < min_dist:
+                for e in enemies:
+                    d = self._edge_dist(unit, e)
+                    if d < min_dist:
                         min_dist = d
                         closest = e
                 
@@ -424,16 +441,10 @@ class Game:
                     target_unit = closest
                     intent = "attack"
                 else:
-                    # 2. If no high value target nearby, head to enemy base
-                    enemy_base = next((e for e in enemies if e.subtype == "base"), None)
-                    if enemy_base:
-                        target_unit = enemy_base
-                        intent = "attack"
-                    else:
-                        # 3. Just move forward
-                        enemy_base_x = GRID_WIDTH - 2 if unit.team == "blue" else 1
-                        target_pos = (enemy_base_x, unit.y)
-                        intent = "move"
+                    # No enemies? Move to enemy base
+                    enemy_base_x = GRID_WIDTH - 2 if unit.team == "blue" else 1
+                    target_pos = (enemy_base_x, unit.y)
+                    intent = "move"
 
             # Execute Intent
             speed = getattr(unit, 'move_speed', 0.5)
@@ -447,78 +458,7 @@ class Game:
                 unit.facing = "right" if target_pos[0] >= unit.x else "left"
             
             if intent == "attack" and target_unit:
-                # Robust Edge Distance Check
-                x_dist = 0
-                if unit.x + unit.width <= target_unit.x:
-                    x_dist = target_unit.x - (unit.x + unit.width)
-                elif target_unit.x + target_unit.width <= unit.x:
-                    x_dist = unit.x - (target_unit.x + target_unit.width)
-                
-                y_dist = 0
-                if unit.y + unit.height <= target_unit.y:
-                    y_dist = target_unit.y - (unit.y + unit.height)
-                elif target_unit.y + target_unit.height <= unit.y:
-                    y_dist = unit.y - (target_unit.y + target_unit.height)
-                
-                import math
-                edge_dist = math.sqrt(x_dist**2 + y_dist**2)
-                
-                if edge_dist <= atk_range + 0.1:
-                    # Attack
-                    if (self.tick_count - getattr(unit, 'last_attack_tick', 0)) >= atk_cooldown:
-                        damage = getattr(unit, 'damage', 1)
-                        # Bonus logic
-                        bonus = getattr(unit, 'bonus_vs_building', 0)
-                        if target_unit.type in ["building", "base"]: damage += bonus
-                        
-                        target_unit.hp -= damage
-                        unit.last_attack_tick = self.tick_count
-                        unit.action_state = "attack"
-                        unit.target_id = target_unit.id
-                        
-                        if target_unit.hp <= 0:
-                             self.players[unit.team].mana = min(self.players[unit.team].mana + 1.0, 10.0)
-                else:
-                    # Move towards target
-                    prev_x, prev_y = unit.x, unit.y
-                    reached = self._move_towards(unit, target_unit.x, target_unit.y, speed)
-                    
-                    if unit.x != prev_x or unit.y != prev_y:
-                        unit.action_state = "move"
-                    elif not reached: # Blocked and didn't reach target
-                        # Check if blocked by Enemy Building
-                        nearby_walls = [e for e in self.entities if e.team != unit.team and e.type == "building" and e.hp > 0]
-                        blocker = None
-                        for w in nearby_walls:
-                            # Edge Dist Check
-                            wx_dist = 0
-                            if unit.x + unit.width <= w.x: wx_dist = w.x - (unit.x + unit.width)
-                            elif w.x + w.width <= unit.x: wx_dist = unit.x - (w.x + w.width)
-                            
-                            wy_dist = 0
-                            if unit.y + unit.height <= w.y: wy_dist = w.y - (unit.y + unit.height)
-                            elif w.y + w.height <= unit.y: wy_dist = unit.y - (w.y + w.height)
-                            
-                            w_edge_dist = math.sqrt(wx_dist**2 + wy_dist**2)
-                            
-                            if w_edge_dist <= atk_range + 0.5:
-                                blocker = w
-                                break
-                        
-                        if blocker and (self.tick_count - getattr(unit, 'last_attack_tick', 0)) >= atk_cooldown:
-                             # Attack Blocker
-                             damage = getattr(unit, 'damage', 1)
-                             bonus = getattr(unit, 'bonus_vs_building', 0)
-                             damage += bonus # Always building
-                             
-                             blocker.hp -= damage
-                             unit.last_attack_tick = self.tick_count
-                             unit.action_state = "attack"
-                             unit.target_id = blocker.id
-                             
-                             if blocker.hp <= 0:
-                                  self.players[unit.team].mana = min(self.players[unit.team].mana + 1.0, 10.0)
-            
+                self._smart_move_or_attack(unit, target_unit, speed, atk_range, atk_cooldown)
             elif intent == "move" and target_pos:
                 prev_x, prev_y = unit.x, unit.y
                 reached = self._move_towards(unit, target_pos[0], target_pos[1], speed)
