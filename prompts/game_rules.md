@@ -16,11 +16,14 @@
 - **archer** (Cost: 4): Ranged unit (Range 3). Low HP (60), Speed 2. Good DPS.
 - **goblin** (Cost: 2): Cheap melee. Low HP (40), Fast (Speed 1). Swarm unit.
 - **orc** (Cost: 5): Heavy melee. High HP (200), High Damage (20), Slow (Speed 3).
+- **catapult** (Cost: 5): Siege unit. Low HP (50), Long Range (5), Very Slow (Speed 4). **Deals massive damage to Buildings (50 DMG).**
 - **wall** (Cost: 2): Defense structure. High HP (300). Blocks movement.
 - **turret** (Cost: 5): Defense structure. HP 100. Attacks enemies.
 
 ## 4. Mechanics
 - **Mana**: You gain 0.5 Mana per turn (Cap 10). Spending mana is instant.
+- **Kill Bounty**: You gain +1 Mana immediately when one of your units kills an enemy unit or building.
+- **Sudden Death**: After tick 150, Bases decay 5x faster (25 HP per 10 ticks).
 - **Action**: Every turn you can perform ONE action:
   - `{"type": "spawn", "card_id": "knight", "y": 0}` (Spawn unit in lane 0)
   - `{"type": "build", "card_id": "wall", "x": 3, "y": 1}` (Build wall at 3,1)

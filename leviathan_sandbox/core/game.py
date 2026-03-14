@@ -9,6 +9,7 @@ from leviathan_sandbox.core.objects.knight.entity import Knight
 from leviathan_sandbox.core.objects.archer.entity import Archer
 from leviathan_sandbox.core.objects.goblin.entity import Goblin
 from leviathan_sandbox.core.objects.orc.entity import Orc
+from leviathan_sandbox.core.objects.catapult.entity import Catapult
 from leviathan_sandbox.core.objects.wall.entity import Wall
 from leviathan_sandbox.core.objects.turret.entity import Turret
 
@@ -71,12 +72,14 @@ class Game:
         # Archer -> A/a
         # Goblin -> G/g
         # Orc -> O/o
+        # Catapult -> C/c
         # Wall -> W/w
         # Turret -> T/t
         # Base -> B/b
         
         char_map = {
             "knight": "K", "archer": "A", "goblin": "G", "orc": "O",
+            "catapult": "C",
             "wall": "W", "turret": "T", "base": "B"
         }
         
@@ -219,7 +222,7 @@ class Game:
         player = self.players[team]
         
         # Cost check (Simple hardcoded costs for now)
-        costs = {"knight": 3, "archer": 4, "goblin": 2, "orc": 5}
+        costs = {"knight": 3, "archer": 4, "goblin": 2, "orc": 5, "catapult": 5}
         cost = costs.get(unit_type, 3)
         
         if player.mana < cost:
@@ -250,6 +253,8 @@ class Game:
             unit = Goblin(id=unit_id, team=team, x=spawn_x, y=spawn_y)
         elif unit_type == "orc":
             unit = Orc(id=unit_id, team=team, x=spawn_x, y=spawn_y)
+        elif unit_type == "catapult":
+            unit = Catapult(id=unit_id, team=team, x=spawn_x, y=spawn_y)
             
         if unit:
             self.entities.append(unit)
@@ -368,8 +373,19 @@ class Game:
                 # Turret damage fix
                 if attacker.type == "building" and damage == 0: damage = 5 # Fallback
                 
+                # Bonus Damage Logic
+                bonus_vs_building = getattr(attacker, 'bonus_vs_building', 0)
+                if target.type == "building" or target.type == "base":
+                     damage += bonus_vs_building
+
                 target.hp -= damage
                 attacker.last_move_tick = self.tick # Reset cooldown
+                
+                # Kill Reward
+                if target.hp <= 0:
+                     # Simple Kill Reward: +1 Mana
+                     self.players[attacker.team].mana = min(self.players[attacker.team].mana + 1.0, 10.0)
+
             elif attacker.type == "unit":
                 # Move (Only units move)
                 next_x = attacker.x + dx_dir

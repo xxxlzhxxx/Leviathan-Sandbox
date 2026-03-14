@@ -114,13 +114,36 @@
         // Grid Config
         const GRID_W = 20;
         const GRID_H = 3;
-        const CELL_SIZE = 80; // 20 * 80 = 1600 width
-        const CANVAS_W = 1200;
+        const CELL_SIZE = 80; 
+        const GRID_OFFSET_X = 20; // Padding for base HP bars
+        const CANVAS_W = 1200 + (GRID_OFFSET_X * 2); // Add padding to width
         const CANVAS_H = 300;
         
         // Update Canvas Size
         canvas.width = CANVAS_W;
         canvas.height = CANVAS_H;
+
+        // Preload Images
+        const assets = {};
+        const assetNames = ["knight", "archer", "goblin", "orc", "catapult", "wall", "turret", "base"];
+        assetNames.forEach(name => {
+            const img = new Image();
+            // Since we are running locally and opening index.html directly,
+            // we should assume the assets are in a relative path.
+            // However, the assets were moved to core/objects/...
+            // For simple local viewing, it's easier to keep a copy in web/assets.
+            // But the user asked to put them in objects folder.
+            // To make index.html load them, we would need to know the relative path structure or copy them back.
+            // Since index.html is in web/, and objects are in ../core/objects/, browsers might block loading local files outside root.
+            // Best practice for this "static site" is to keep assets in web/assets for the frontend.
+            // The user wanted "generated pictures should be put into objects folder".
+            // So I did that. Now I should probably COPY them back to web/assets or symlink so the web player can see them.
+            // I already copied them in the previous step (cp command).
+            // So they are BOTH in objects/.. and web/assets/.
+            // So this path is correct:
+            img.src = `assets/${name}.png`;
+            assets[name] = img;
+        });
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
@@ -185,16 +208,21 @@
             // Clear
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
+            // Apply Grid Offset
+            ctx.save();
+            ctx.translate(GRID_OFFSET_X, 0);
+            
             // Draw Lanes
             ctx.strokeStyle = 'rgba(255,255,255,0.2)';
             ctx.lineWidth = 1;
             const LANE_HEIGHT = CANVAS_H / GRID_H;
-            const COL_WIDTH = CANVAS_W / GRID_W;
+            const PLAY_AREA_W = 1200; // Fixed width for gameplay area
+            const COL_WIDTH = PLAY_AREA_W / GRID_W;
 
             for (let y = 0; y <= GRID_H; y++) {
                 ctx.beginPath();
                 ctx.moveTo(0, y * LANE_HEIGHT);
-                ctx.lineTo(CANVAS_W, y * LANE_HEIGHT);
+                ctx.lineTo(PLAY_AREA_W, y * LANE_HEIGHT);
                 ctx.stroke();
             }
             // Vertical lines
@@ -220,116 +248,147 @@
             ctx.fillStyle = 'rgba(255, 0, 0, 0.05)';
             ctx.fillRect((GRID_W - 5) * COL_WIDTH, 0, COL_WIDTH * 4, CANVAS_H); // Col 15-18
 
-            if (!replayData || !replayData.ticks[tickIndex]) return;
+            if (replayData && replayData.ticks[tickIndex]) {
+                const state = replayData.ticks[tickIndex];
 
-            const state = replayData.ticks[tickIndex];
+                // Group entities by position for stacking visualization
+                const entityMap = {};
+                state.entities.forEach(e => {
+                    const key = `${e.x},${e.y}`;
+                    if (!entityMap[key]) entityMap[key] = [];
+                    entityMap[key].push(e);
+                });
 
-            // Group entities by position for stacking visualization
-            const entityMap = {};
-            state.entities.forEach(e => {
-                const key = `${e.x},${e.y}`;
-                if (!entityMap[key]) entityMap[key] = [];
-                entityMap[key].push(e);
-            });
-
-            // Draw Entities
-            // We iterate keys to handle stacking
-            Object.keys(entityMap).forEach(key => {
-                const stack = entityMap[key];
-                // Sort stack by type: buildings bottom, units top?
-                // Or just iterate.
-                
-                stack.forEach((e, index) => {
-                    // Offset for stacking visualization if > 1 unit
-                    // Only offset UNITS, buildings stay fixed?
-                    // Let's just offset everything slightly based on index
-                    const offset = (stack.length > 1) ? (index * 5) - ((stack.length-1)*2.5) : 0;
+                // Draw Entities
+                Object.keys(entityMap).forEach(key => {
+                    const stack = entityMap[key];
                     
-                    // Calculate position based on grid
-                    const COL_WIDTH = CANVAS_W / GRID_W;
-                    const LANE_HEIGHT = CANVAS_H / GRID_H;
+                    stack.forEach((e, index) => {
+                        const offset = (stack.length > 1) ? (index * 5) - ((stack.length-1)*2.5) : 0;
+                        
+                        const x = e.x * COL_WIDTH + offset;
+                        const y = e.y * LANE_HEIGHT + offset;
+                        const w = e.width * COL_WIDTH;
+                        const h = e.height * LANE_HEIGHT;
+                        
+                        // Color (Fallback)
+                        let color = e.team === 'blue' ? '#4488ff' : '#ff4444';
+                        if (e.type === 'base') color = e.team === 'blue' ? '#000088' : '#880000';
+                        if (e.type === 'building' && e.function === 'defense') color = '#888';
+                        
+                        ctx.fillStyle = color;
+                        
+                        // Try to draw Image
+                        const img = assets[e.subtype];
+                        if (img && img.complete && img.naturalHeight !== 0) {
+                            ctx.save();
+                            if (e.team === 'red') {
+                                ctx.translate(x + w, y);
+                                ctx.scale(-1, 1);
+                                ctx.drawImage(img, 0, 0, w, h);
+                            } else {
+                                ctx.drawImage(img, x, y, w, h);
+                            }
+                            ctx.restore();
+                            
+                            if (e.team === 'blue') ctx.strokeStyle = 'rgba(100, 200, 255, 0.5)';
+                            else ctx.strokeStyle = 'rgba(255, 100, 100, 0.5)';
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(x, y, w, h);
+                            
+                        } else {
+                            // Fallback drawing
+                            if (e.type === 'unit') {
+                                 ctx.beginPath();
+                                 ctx.arc(x + w/2, y + h/2, Math.min(w,h) * 0.3, 0, Math.PI * 2);
+                                 ctx.fill();
+                                 ctx.strokeStyle = '#fff';
+                                 ctx.stroke();
+                            } else {
+                                ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+                                ctx.strokeStyle = '#fff';
+                                ctx.strokeRect(x+2, y+2, w-4, h-4);
+                            }
+                        }
+                        
+                        // HP Bar Logic
+                        const hpPct = Math.max(0, e.hp / e.max_hp);
+                        
+                        if (e.type === 'base') {
+                            // Vertical HP Bar for Base
+                            const barW = 10;
+                            const barH = h;
+                            let barX;
+                            
+                            if (e.team === 'blue') {
+                                // Left side of base (Outside grid)
+                                barX = x - barW - 5;
+                            } else {
+                                // Right side of base (Outside grid)
+                                barX = x + w + 5;
+                            }
+                            
+                            ctx.fillStyle = '#333';
+                            ctx.fillRect(barX, y, barW, barH);
+                            
+                            const fillH = barH * hpPct;
+                            ctx.fillStyle = hpPct > 0.5 ? '#0f0' : '#f00';
+                            ctx.fillRect(barX, y + (barH - fillH), barW, fillH);
+                            
+                            ctx.strokeStyle = '#fff';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(barX, y, barW, barH);
+                            
+                        } else {
+                            // Standard Horizontal HP Bar for Units
+                            // Overlay on top of the unit image, semi-transparent
+                            const barW = w - 4;
+                            const barH = 4;
+                            const barX = x + 2;
+                            const barY = y + 2; // Top of the unit
+                            
+                            // Background (Semi-transparent black)
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                            ctx.fillRect(barX, barY, barW, barH);
+                            
+                            // Fill
+                            ctx.fillStyle = hpPct > 0.5 ? 'rgba(0, 255, 0, 0.8)' : 'rgba(255, 0, 0, 0.8)';
+                            ctx.fillRect(barX, barY, barW * hpPct, barH);
+                        }
+                    });
                     
-                    const x = e.x * COL_WIDTH + offset;
-                    const y = e.y * LANE_HEIGHT + offset;
-                    const w = e.width * COL_WIDTH;
-                    const h = e.height * LANE_HEIGHT;
-                    
-                    // Color
-                    let color = e.team === 'blue' ? '#4488ff' : '#ff4444';
-                    if (e.type === 'base') color = e.team === 'blue' ? '#000088' : '#880000';
-                    if (e.type === 'building' && e.function === 'defense') color = '#888';
-                    
-                    ctx.fillStyle = color;
-                    
-                    if (e.type === 'unit') {
-                         // Draw Circle for units
-                         ctx.beginPath();
-                         ctx.arc(x + w/2, y + h/2, Math.min(w,h) * 0.3, 0, Math.PI * 2);
-                         ctx.fill();
-                         ctx.strokeStyle = '#fff';
-                         ctx.stroke();
-                    } else {
-                        // Draw Rect for buildings
-                        ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
-                        ctx.strokeStyle = '#fff';
-                        ctx.strokeRect(x+2, y+2, w-4, h-4);
-                    }
-                    
-                    // HP Bar (Below the unit now)
-                    const hpPct = Math.max(0, e.hp / e.max_hp);
-                    const barY = y + h + 2; // Position below the unit
-                    
-                    ctx.fillStyle = '#333';
-                    ctx.fillRect(x, barY, w, 4);
-                    ctx.fillStyle = hpPct > 0.5 ? '#0f0' : '#f00';
-                    ctx.fillRect(x, barY, w * hpPct, 4);
-                    
-                    // Label (Type)
-                    if (e.type !== 'base') {
-                         ctx.fillStyle = '#fff';
-                         ctx.font = 'bold 12px Arial';
-                         ctx.textAlign = 'center';
-                         ctx.textBaseline = 'middle';
+                    // Stack Count Indicator
+                    if (stack.length > 1) {
+                         const e = stack[0];
+                         const x = e.x * COL_WIDTH;
+                         const y = e.y * LANE_HEIGHT;
                          
-                         const charMap = {
-                             "knight": "K", "archer": "A", "goblin": "G", "orc": "O",
-                             "wall": "W", "turret": "T"
-                         };
-                         let char = charMap[e.subtype] || "?";
-                         
-                         // If stack > 1, show stack count on top unit?
-                         // Or just let them overlap
-                         ctx.fillText(char, x + w/2, y + h/2);
+                         ctx.fillStyle = 'white';
+                         ctx.font = 'bold 14px Arial';
+                         ctx.textAlign = 'right';
+                         ctx.fillText(`x${stack.length}`, x + COL_WIDTH - 5, y + LANE_HEIGHT - 5);
                     }
                 });
-                
-                // Stack Count Indicator
-                if (stack.length > 1) {
-                     const e = stack[0]; // Use first for position reference
-                     const COL_WIDTH = CANVAS_W / GRID_W;
-                     const LANE_HEIGHT = CANVAS_H / GRID_H;
-                     const x = e.x * COL_WIDTH;
-                     const y = e.y * LANE_HEIGHT;
-                     
-                     ctx.fillStyle = 'white';
-                     ctx.font = 'bold 14px Arial';
-                     ctx.textAlign = 'right';
-                     ctx.fillText(`x${stack.length}`, x + COL_WIDTH - 5, y + LANE_HEIGHT - 5);
-                }
-            });
+            }
             
+            ctx.restore(); // End Translation
+
             // Draw Mana/Stats (Overlay)
-            ctx.fillStyle = '#fff';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'left';
-            ctx.fillText(`Blue HP: ${state.players.blue.hp.toFixed(0)} | Mana: ${state.players.blue.mana}`, 10, 30);
-            ctx.textAlign = 'right';
-            ctx.fillText(`Red HP: ${state.players.red.hp.toFixed(0)} | Mana: ${state.players.red.mana}`, CANVAS_W - 10, 30);
-            
-            if (replayData.winner) {
-                 ctx.textAlign = 'center';
-                 ctx.font = '30px Arial';
-                 ctx.fillText(`Winner: ${replayData.winner.toUpperCase()}`, CANVAS_W/2, 50);
+            // Use replayData state if available, else render static or previous
+            if (replayData && replayData.ticks[tickIndex]) {
+                const state = replayData.ticks[tickIndex];
+                ctx.fillStyle = '#fff';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText(`Blue HP: ${state.players.blue.hp.toFixed(0)} | Mana: ${state.players.blue.mana}`, 20, 30); // Adjusted for margin
+                ctx.textAlign = 'right';
+                ctx.fillText(`Red HP: ${state.players.red.hp.toFixed(0)} | Mana: ${state.players.red.mana}`, CANVAS_W - 20, 30); // Adjusted for margin
+                
+                if (replayData.winner) {
+                     ctx.textAlign = 'center';
+                     ctx.font = '30px Arial';
+                     ctx.fillText(`Winner: ${replayData.winner.toUpperCase()}`, CANVAS_W/2, 50);
+                }
             }
         }
         
