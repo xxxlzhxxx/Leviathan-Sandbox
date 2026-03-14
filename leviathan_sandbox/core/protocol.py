@@ -32,8 +32,8 @@ class CommandType(str, Enum):
 class UnitCommand(BaseModel):
     unit_id: str
     type: CommandType
-    target_x: Optional[float] = None
-    target_y: Optional[float] = None
+    target_x: Optional[int] = None # Integer target
+    target_y: Optional[int] = None
     target_unit_id: Optional[str] = None
 
 # --- State Models (Sent to Agent) ---
@@ -45,14 +45,14 @@ class EntityState(BaseModel):
     subtype: str # "knight", "wall", etc.
     hp: int
     max_hp: int
-    x: float
-    y: float # Changed to float for free movement
+    x: int # Integer coordinates
+    y: int 
     width: int
     height: int
     # Optional dynamic stats
     damage: int = 0
     range: int = 0
-    move_speed: float = 0
+    move_speed: int = 0 # Integer speed
     is_frozen: bool = False # Future proofing
     action_state: str = "idle" # idle, move, attack
     target_id: Optional[str] = None # ID of the target being attacked
@@ -60,7 +60,7 @@ class EntityState(BaseModel):
 
 class PlayerState(BaseModel):
     team: str
-    mana: int
+    mana: int # Integer mana
     base_hp: int
     deck: List[str]
 
@@ -73,7 +73,7 @@ class GameState(BaseModel):
     map_height: int
     entities: List[EntityState]
     me: PlayerState
-    opponent: PlayerState # TODO: Hide mana/deck for Fog of War later
+    opponent: PlayerState 
     
     grid_view: List[str] 
     last_turn_changes: List[str]
@@ -81,10 +81,10 @@ class GameState(BaseModel):
 # --- Action Models (Received from Agent) ---
 
 class Action(BaseModel):
-    type: str = "pass" # "spawn", "build", "pass"
+    type: str = "pass" 
     card_id: str = "" 
-    x: Optional[float] = None 
-    y: float = 0 
+    x: Optional[int] = None 
+    y: int = 0 
     
     commands: List[UnitCommand] = []
     

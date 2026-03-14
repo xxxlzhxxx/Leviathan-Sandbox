@@ -7,8 +7,8 @@ class Entity:
     team: str  # "blue" or "red"
     hp: int
     max_hp: int
-    x: float # Changed to float
-    y: float # Changed to float
+    x: int # Integer
+    y: int # Integer
     width: int
     height: int
     type: str # "base", "unit", "building"
@@ -18,12 +18,14 @@ class Entity:
 class Unit(Entity):
     damage: int = 0
     range: int = 0
-    move_speed: float = 1.0 # tiles per tick
-    last_attack_tick: int = 0 # Renamed from last_move_tick
+    move_speed: int = 1 # ticks per move
+    last_attack_tick: int = 0 
+    last_move_tick: int = 0 # Added for integer movement cooldown
     target_id: Optional[str] = None
     
     # Command State
     command: Optional[Any] = None # Stores active UnitCommand
+    action_state: str = "idle" # idle, move, attack
 
 @dataclass
 class Building(Entity):

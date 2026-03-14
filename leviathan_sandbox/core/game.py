@@ -198,53 +198,57 @@ class Game:
             
         return False
 
-    def _is_occupied(self, x: int, y: int, width: int = 1, height: int = 1, exclude_id: str = None, ignore_team: str = None) -> bool:
+    def _is_occupied(self, x: int, y: int, width: int = 1, height: int = 1, exclude_id: str = None, ignore_team: str = None, pass_friendly_units: bool = False, mover_team: str = None) -> bool:
         for e in self.entities:
             if e.id == exclude_id or e.hp <= 0: continue
             if ignore_team and e.team == ignore_team: continue
+            
+            if pass_friendly_units and mover_team:
+                if e.team == mover_team and e.type == "unit":
+                    continue
+            
             if (x < e.x + e.width and x + width > e.x and
                 y < e.y + e.height and y + height > e.y):
                 return True
         return False
 
-    def spawn_unit(self, team: str, unit_type: str, lane: int, x: float = None):
+    def spawn_unit(self, team: str, unit_type: str, lane: int, x: int = None):
         player = self.players[team]
         costs = {"knight": 3, "archer": 4, "goblin": 2, "orc": 5, "catapult": 5}
         cost = costs.get(unit_type, 3)
         if player.mana < cost: return False
             
         # Default spawn outside base
-        default_x = 3.0 if team == "blue" else float(GRID_WIDTH - 4)
+        default_x = 3 if team == "blue" else (GRID_WIDTH - 4)
         spawn_x = default_x
         
         # Allow spawning near base (Home Zone)
-        # Blue: [0, 8)
-        # Red: [16, 24)
         if x is not None:
             if team == "blue":
-                if 0 <= x < 8: spawn_x = float(x)
+                if 0 <= x < 8: spawn_x = int(x)
             else:
-                if (GRID_WIDTH - 8) <= x < GRID_WIDTH: spawn_x = float(x)
+                if (GRID_WIDTH - 8) <= x < GRID_WIDTH: spawn_x = int(x)
         
-        spawn_y = float(lane)
+        spawn_y = int(lane)
         if not (0 <= spawn_y < GRID_HEIGHT): return False
             
-        if self._is_occupied_float(spawn_x, int(spawn_y), 1, 1, ignore_team=team): return False
+        if self._is_occupied(spawn_x, spawn_y, 1, 1, ignore_team=team): return False
 
         player.mana -= cost
         unit_id = f"{team}_u_{self.tick_count}_{random.randint(1000,9999)}"
         unit = None
         
+        # Speed: Ticks per move (Lower is faster)
         if unit_type == "knight":
-            unit = Knight(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 0.5
+            unit = Knight(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 2
         elif unit_type == "archer":
-            unit = Archer(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 0.5
+            unit = Archer(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 2
         elif unit_type == "goblin":
-            unit = Goblin(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 1.0
+            unit = Goblin(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 1
         elif unit_type == "orc":
-            unit = Orc(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 0.33
+            unit = Orc(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 3
         elif unit_type == "catapult":
-            unit = Catapult(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 0.33
+            unit = Catapult(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 3
             
         if unit:
             self.entities.append(unit)
@@ -276,27 +280,6 @@ class Game:
             return True
         return False
 
-    def _is_occupied_float(self, x: float, y: int, width: int = 1, height: int = 1, exclude_id: str = None, ignore_team: str = None, pass_friendly_units: bool = False, mover_team: str = None) -> bool:
-        for e in self.entities:
-            if e.id == exclude_id or e.hp <= 0: continue
-            if ignore_team and e.team == ignore_team: continue
-            
-            # Friendly Unit Pass-through Logic
-            if pass_friendly_units and mover_team:
-                if e.team == mover_team and e.type == "unit":
-                    continue # Pass through friendly units
-            
-            # Shrink collision box slightly to prevent edge sticking
-            margin = 0.1
-            if (x + margin < e.x + e.width - margin and x + width - margin > e.x + margin and
-                y + margin < e.y + e.height - margin and y + height - margin > e.y + margin):
-                return True
-        return False
-
-    def _dist(self, e1, e2):
-        import math
-        return math.sqrt((e1.x - e2.x)**2 + (e1.y - e2.y)**2)
-
     def _edge_dist(self, e1, e2):
         import math
         x_dist = 0
@@ -307,39 +290,37 @@ class Game:
         if e1.y + e1.height <= e2.y: y_dist = e2.y - (e1.y + e1.height)
         elif e2.y + e2.height <= e1.y: y_dist = e1.y - (e2.y + e2.height)
         
-        return math.sqrt(x_dist**2 + y_dist**2)
+        return x_dist + y_dist # Manhattan distance (Integer)
 
-    def _move_towards(self, entity, tx, ty, delta):
-        import math
-        dx = tx - entity.x
-        dy = ty - entity.y
-        dist = math.sqrt(dx*dx + dy*dy)
+    def _move_step(self, unit, tx, ty):
+        dx = 0
+        if tx > unit.x: dx = 1
+        elif tx < unit.x: dx = -1
         
-        if dist <= delta:
-            # Reached
-            if not self._is_occupied_float(tx, ty, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
-                entity.x = tx
-                entity.y = ty
-                return True
-            return False 
+        dy = 0
+        if ty > unit.y: dy = 1
+        elif ty < unit.y: dy = -1
         
-        ratio = delta / dist
-        next_x = entity.x + dx * ratio
-        next_y = entity.y + dy * ratio
+        # Prioritize X (Lane Push)
+        if dx != 0:
+            next_x = unit.x + dx
+            if 0 <= next_x < GRID_WIDTH:
+                if not self._is_occupied(next_x, unit.y, unit.width, unit.height, exclude_id=unit.id, pass_friendly_units=True, mover_team=unit.team):
+                    unit.x = next_x
+                    return True
         
-        # Try Direct Move (No Sliding)
-        if 0 <= next_x < GRID_WIDTH and 0 <= next_y < GRID_HEIGHT:
-             if not self._is_occupied_float(next_x, next_y, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
-                 entity.x = next_x
-                 entity.y = next_y
-                 return False
-                 
+        if dy != 0:
+            next_y = unit.y + dy
+            if 0 <= next_y < GRID_HEIGHT:
+                if not self._is_occupied(unit.x, next_y, unit.width, unit.height, exclude_id=unit.id, pass_friendly_units=True, mover_team=unit.team):
+                    unit.y = next_y
+                    return True
         return False
 
     def _smart_move_or_attack(self, unit, target, speed, atk_range, atk_cooldown):
         # 1. Attack Check
         edge_dist = self._edge_dist(unit, target)
-        if edge_dist <= atk_range + 0.1:
+        if edge_dist <= atk_range:
             if (self.tick_count - getattr(unit, 'last_attack_tick', 0)) >= atk_cooldown:
                 damage = getattr(unit, 'damage', 1)
                 bonus = getattr(unit, 'bonus_vs_building', 0)
@@ -350,15 +331,18 @@ class Game:
                 unit.action_state = "attack"
                 unit.target_id = target.id
                 if target.hp <= 0:
-                     self.players[unit.team].mana = min(self.players[unit.team].mana + 1.0, 10.0)
+                     self.players[unit.team].mana = min(self.players[unit.team].mana + 1, 10)
             return
 
         # 2. Move Check
-        prev_x, prev_y = unit.x, unit.y
-        self._move_towards(unit, target.x, target.y, speed)
-        
-        if unit.x != prev_x or unit.y != prev_y:
-            unit.action_state = "move"
+        last_move = getattr(unit, 'last_move_tick', 0)
+        if (self.tick_count - last_move) >= speed:
+            prev_x, prev_y = unit.x, unit.y
+            self._move_step(unit, target.x, target.y)
+            
+            if unit.x != prev_x or unit.y != prev_y:
+                unit.action_state = "move"
+                unit.last_move_tick = self.tick_count
 
     def run_tick(self):
         from copy import deepcopy
@@ -366,14 +350,13 @@ class Game:
         self.tick_count += 1
         
         for p in self.players.values():
-            p.mana = min(p.mana + MANA_REGEN, 10.0) 
+            p.mana = min(p.mana + 1, 10) # +1 Integer Mana per turn
             if p.base.hp <= 0: p.base.hp = 0
 
         active_units = [e for e in self.entities if e.hp > 0 and e.type == "unit"]
-        # Buildings also attack but don't move
         active_buildings = [e for e in self.entities if e.hp > 0 and e.type == "building" and getattr(e, 'function', '') == 'attack']
         
-        # Process Buildings (Simple Auto-Attack)
+        # Process Buildings
         for b in active_buildings:
             b.action_state = "idle"
             attack_cooldown = getattr(b, 'attack_speed', 1)
@@ -397,9 +380,9 @@ class Game:
                 b.action_state = "attack"
                 b.target_id = target.id
 
-        # Process Units (Move & Attack)
+        # Process Units
         for unit in active_units:
-            unit.action_state = "idle" # Reset state
+            unit.action_state = "idle"
             target_pos = None
             target_unit = None
             intent = "idle"
@@ -417,19 +400,16 @@ class Game:
                         target_unit = t_unit
                         intent = "attack"
                     else:
-                        unit.command = None # Target dead/gone
+                        unit.command = None
                 elif cmd.type == "stop":
                     unit.command = None
                     continue
 
-            # B. Default AI (Simple: Nearest Enemy)
+            # B. Default AI (Nearest Enemy)
             if not unit.command:
                 enemies = [e for e in self.entities if e.team != unit.team and e.hp > 0]
-                
-                # Priority: Absolutely nearest enemy (Unit or Building)
                 closest = None
                 min_dist = 999
-                agro_range = 999.0 # Global agro (or large enough)
                 
                 for e in enemies:
                     d = self._edge_dist(unit, e)
@@ -441,13 +421,12 @@ class Game:
                     target_unit = closest
                     intent = "attack"
                 else:
-                    # No enemies? Move to enemy base
                     enemy_base_x = GRID_WIDTH - 2 if unit.team == "blue" else 1
                     target_pos = (enemy_base_x, unit.y)
                     intent = "move"
 
             # Execute Intent
-            speed = getattr(unit, 'move_speed', 0.5)
+            speed = getattr(unit, 'move_speed', 1)
             atk_range = getattr(unit, 'range', 1)
             atk_cooldown = getattr(unit, 'attack_speed', 1)
             
@@ -460,11 +439,14 @@ class Game:
             if intent == "attack" and target_unit:
                 self._smart_move_or_attack(unit, target_unit, speed, atk_range, atk_cooldown)
             elif intent == "move" and target_pos:
-                prev_x, prev_y = unit.x, unit.y
-                reached = self._move_towards(unit, target_pos[0], target_pos[1], speed)
-                if unit.x != prev_x or unit.y != prev_y:
-                    unit.action_state = "move"
-                if reached and unit.command:
+                last_move = getattr(unit, 'last_move_tick', 0)
+                if (self.tick_count - last_move) >= speed:
+                    prev_x, prev_y = unit.x, unit.y
+                    self._move_step(unit, target_pos[0], target_pos[1])
+                    if unit.x != prev_x or unit.y != prev_y:
+                        unit.action_state = "move"
+                        unit.last_move_tick = self.tick_count
+                if unit.x == target_pos[0] and unit.y == target_pos[1] and unit.command:
                     unit.command = None
 
         self.entities = [e for e in self.entities if e.hp > 0 or e.type == "base"]
