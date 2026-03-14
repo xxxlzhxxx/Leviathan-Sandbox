@@ -10,6 +10,7 @@ from rich.progress import track
 from leviathan_sandbox.core.game import Game
 from leviathan_sandbox.core.agent import RandomAgent, ScriptedAgent, VolcAgent, AggressiveAgent, SiegeAgent
 from leviathan_sandbox.core.renderer import HeadlessRenderer
+from leviathan_sandbox.core.roster import OPPONENTS, get_opponent_by_id
 
 app = typer.Typer()
 console = Console()
@@ -33,19 +34,79 @@ def init(name: str = "my_bot"):
     console.print(f"[green]Created {filename}[/green]")
 
 @app.command()
+def list_opponents():
+    """List all available predefined opponents."""
+    from rich.table import Table
+    table = Table(title="Opponent Roster")
+    table.add_column("ID", style="cyan")
+    table.add_column("Name", style="magenta")
+    table.add_column("Difficulty", style="green")
+    table.add_column("Description")
+    
+    for oid, data in OPPONENTS.items():
+        table.add_row(oid, data["name"], data.get("difficulty", "Unknown"), data.get("description", ""))
+    
+    console.print(table)
+
+@app.command()
 def battle(
     my_prompt: str = typer.Option(None, help="Your strategy prompt string"),
-    opponent: str = typer.Option("aggressive", help="Opponent type (aggressive, siege, scripted, random) or prompt string"),
+    opponent: str = typer.Option("aggressive", help="Opponent type or prompt string (Legacy)"),
+    opponent_id: str = typer.Option(None, help="ID of the opponent from 'list-opponents'"),
     api_key: str = typer.Option(None, help="VolcEngine API Key (env: ARK_API_KEY)"),
     render: bool = typer.Option(True, help="Render battle to video"),
     debug: bool = False
 ):
-    """Start a battle directly with prompts."""
+    """Start a battle directly with prompts or opponent IDs."""
     
     # Resolve API Key
     final_api_key = api_key or os.environ.get("ARK_API_KEY")
     
-    console.print(f"[bold blue]Starting simulation: You vs {opponent}[/bold blue]")
+    # Resolve Opponent
+    red_agent = None
+    opponent_name = opponent
+    
+    if opponent_id:
+        data = get_opponent_by_id(opponent_id)
+        if not data:
+            console.print(f"[red]Error: Opponent ID {opponent_id} not found![/red]")
+            raise typer.Exit(1)
+        
+        opponent_name = data["name"]
+        opp_type = data.get("type", "random")
+        
+        if opp_type == "volc":
+             if not final_api_key:
+                 console.print("[red]Error: API Key required for AI opponent. Set ARK_API_KEY[/red]")
+                 raise typer.Exit(1)
+             red_agent = VolcAgent(team="red", system_prompt=data.get("prompt", ""), api_key=final_api_key, debug=debug)
+        elif opp_type == "aggressive":
+             red_agent = AggressiveAgent(team="red")
+        elif opp_type == "siege":
+             red_agent = SiegeAgent(team="red")
+        elif opp_type == "scripted":
+             red_agent = ScriptedAgent(team="red")
+        elif opp_type == "random":
+             red_agent = RandomAgent(team="red")
+    
+    # Fallback to string opponent if no ID
+    if not red_agent:
+        if opponent == "aggressive":
+            red_agent = AggressiveAgent(team="red")
+        elif opponent == "siege":
+            red_agent = SiegeAgent(team="red")
+        elif opponent == "scripted":
+            red_agent = ScriptedAgent(team="red")
+        elif opponent == "random":
+            red_agent = RandomAgent(team="red")
+        else:
+            # Assume opponent string is a prompt
+            if not final_api_key:
+                 console.print("[red]Error: API Key required for AI opponent. Set ARK_API_KEY[/red]")
+                 raise typer.Exit(1)
+            red_agent = VolcAgent(team="red", system_prompt=opponent, api_key=final_api_key, debug=debug)
+
+    console.print(f"[bold blue]Starting simulation: You vs {opponent_name}[/bold blue]")
     
     game = Game()
     
@@ -58,22 +119,6 @@ def battle(
     else:
         # Default to Aggressive if no prompt
         blue_agent = AggressiveAgent(team="blue")
-
-    # Red Agent (Opponent)
-    if opponent == "aggressive":
-        red_agent = AggressiveAgent(team="red")
-    elif opponent == "siege":
-        red_agent = SiegeAgent(team="red")
-    elif opponent == "scripted":
-        red_agent = ScriptedAgent(team="red")
-    elif opponent == "random":
-        red_agent = RandomAgent(team="red")
-    else:
-        # Assume opponent string is a prompt
-        if not final_api_key:
-             console.print("[red]Error: API Key required for AI opponent. Set ARK_API_KEY or use --api-key[/red]")
-             raise typer.Exit(1)
-        red_agent = VolcAgent(team="red", system_prompt=opponent, api_key=final_api_key, debug=debug)
 
     # Run Game Loop
     for _ in track(range(game.max_turns * 10), description="Simulating..."):
