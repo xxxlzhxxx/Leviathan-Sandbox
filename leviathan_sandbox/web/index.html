@@ -318,7 +318,7 @@
             if (isPlaying) return;
             
             // Fix NaN
-            if (isNaN(currentPlaybackTick) || currentPlaybackTick < 0) {
+            if (typeof currentPlaybackTick !== 'number' || isNaN(currentPlaybackTick) || currentPlaybackTick < 0) {
                 currentPlaybackTick = 0;
             }
             if (currentPlaybackTick >= replayData.ticks.length - 1) {
@@ -327,7 +327,7 @@
 
             isPlaying = true;
             lastFrameTime = performance.now();
-            loop();
+            requestAnimationFrame(loop);
         });
 
         pauseBtn.addEventListener('click', () => {
@@ -617,13 +617,13 @@
                 const state = replayData.ticks[tickIndex];
                 
                 // Update DOM Stats
-                const blueHp = state.players.blue.hp.toFixed(0);
-                const blueMana = state.players.blue.mana.toFixed(1);
+                const blueHp = Number(state.players.blue.hp).toFixed(0);
+                const blueMana = Number(state.players.blue.mana).toFixed(1);
                 document.getElementById('blue-hp').textContent = blueHp;
                 document.getElementById('blue-mana').textContent = blueMana;
                 
-                const redHp = state.players.red.hp.toFixed(0);
-                const redMana = state.players.red.mana.toFixed(1);
+                const redHp = Number(state.players.red.hp).toFixed(0);
+                const redMana = Number(state.players.red.mana).toFixed(1);
                 document.getElementById('red-hp').textContent = redHp;
                 document.getElementById('red-mana').textContent = redMana;
                 

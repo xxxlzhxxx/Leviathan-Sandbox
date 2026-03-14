@@ -249,8 +249,9 @@ class Game:
         current_decay = BASE_DECAY * 5 if is_sudden_death else BASE_DECAY
 
         for p in self.players.values():
-            if self.tick_count % DECAY_INTERVAL == 0:
-                p.base.hp -= current_decay
+            # No base decay anymore
+            # if self.tick_count % DECAY_INTERVAL == 0:
+            #     p.base.hp -= current_decay
             
             p.mana = min(p.mana + MANA_REGEN, 10.0) 
             if p.base.hp <= 0:
