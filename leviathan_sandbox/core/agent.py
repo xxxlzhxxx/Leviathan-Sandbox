@@ -73,6 +73,63 @@ class ScriptedAgent(Agent):
         
         return Action(type="pass", card_id="", y=0)
 
+class AggressiveAgent(Agent):
+    """A bot that aggressively pushes lanes."""
+    def decide(self, state: GameState) -> Action:
+        # 1. If mana is high, spawn big units
+        if state.me.mana >= 6:
+            if "catapult" in state.me.deck:
+                return Action(type="spawn", card_id="catapult", y=random.randint(0, 2))
+            elif "knight" in state.me.deck:
+                return Action(type="spawn", card_id="knight", y=random.randint(0, 2))
+        
+        # 2. If mana is medium, spawn support
+        if state.me.mana >= 4:
+            if "archer" in state.me.deck:
+                # Spawn behind a random lane
+                return Action(type="spawn", card_id="archer", y=random.randint(0, 2))
+            elif "orc" in state.me.deck:
+                return Action(type="spawn", card_id="orc", y=random.randint(0, 2))
+        
+        # 3. If mana is low, spawn cheap units or pass
+        if state.me.mana >= 2:
+            if "goblin" in state.me.deck:
+                return Action(type="spawn", card_id="goblin", y=random.randint(0, 2))
+            if "wall" in state.me.deck and random.random() < 0.2:
+                 # Build wall randomly in front
+                 lane = random.randint(0, 2)
+                 x = random.randint(3, 8) if self.team == "blue" else random.randint(12, 17)
+                 return Action(type="build", card_id="wall", x=x, y=lane)
+
+        return Action(type="pass", card_id="", y=0)
+
+class SiegeAgent(Agent):
+    """A bot that focuses on siege and defense."""
+    def decide(self, state: GameState) -> Action:
+        # 1. Defense first: Build turret if mana allows and RNG says yes
+        if "turret" in state.me.deck and state.me.mana >= 4 and random.random() < 0.3:
+            lane = random.randint(0, 2)
+            # Defensive position
+            x = random.randint(1, 4) if self.team == "blue" else random.randint(16, 19)
+            return Action(type="build", card_id="turret", x=x, y=lane)
+
+        # 2. Siege: Catapult
+        if "catapult" in state.me.deck and state.me.mana >= 6:
+            return Action(type="spawn", card_id="catapult", y=random.randint(0, 2))
+
+        # 3. Tank: Orc/Knight
+        if state.me.mana >= 5:
+            if "orc" in state.me.deck:
+                return Action(type="spawn", card_id="orc", y=random.randint(0, 2))
+            if "knight" in state.me.deck:
+                return Action(type="spawn", card_id="knight", y=random.randint(0, 2))
+
+        # 4. Spam: Goblin
+        if "goblin" in state.me.deck and state.me.mana >= 2:
+             return Action(type="spawn", card_id="goblin", y=random.randint(0, 2))
+
+        return Action(type="pass", card_id="", y=0)
+
 class VolcAgent(Agent):
     """
     Adapter for VolcEngine (Doubao) via OpenAI SDK.
@@ -152,17 +209,24 @@ USER:
                     ]
                 )
                 content = response.choices[0].message.content
-                
-                # Clean content (sometimes models wrap in ```json ... ```)
-                content = content.replace("```json", "").replace("```", "").strip()
-                
                 if self.debug:
                     print(f"--- [LLM Output for {self.team}] ---\n{content}\n------------------------------------")
                 
-                action_dict = json.loads(content)
-                return Action(**action_dict)
+                # Parse JSON
+                try:
+                    action_dict = json.loads(content)
+                    return Action(**action_dict)
+                except json.JSONDecodeError:
+                    # Fallback if markdown block
+                    if "```json" in content:
+                        clean_content = content.split("```json")[1].split("```")[0].strip()
+                        action_dict = json.loads(clean_content)
+                        return Action(**action_dict)
+                    print(f"Error parsing JSON from LLM: {content}")
+                    return Action(type="pass", card_id="", y=0)
+
             except Exception as e:
-                print(f"VolcAgent Error: {e}")
+                print(f"VolcEngine API Error: {e}")
                 return Action(type="pass", card_id="", y=0)
-        else:
-            return Action(type="pass", card_id="", y=0)
+        
+        return Action(type="pass", card_id="", y=0)

@@ -7,7 +7,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.progress import track
 from leviathan_sandbox.core.game import Game
-from leviathan_sandbox.core.agent import RandomAgent, ScriptedAgent, VolcAgent
+from leviathan_sandbox.core.agent import RandomAgent, ScriptedAgent, VolcAgent, AggressiveAgent, SiegeAgent
 
 app = typer.Typer()
 console = Console()
@@ -67,6 +67,8 @@ def fight(
     # Initialize Agents
     
     # Blue Agent
+    blue_type = blue_strategy.get("type", "random")
+    
     if use_volc or "api_key" in blue_strategy:
         blue_agent = VolcAgent(
             team="blue", 
@@ -74,12 +76,18 @@ def fight(
             api_key=blue_strategy.get("api_key", ""),
             debug=debug
         )
+    elif blue_type == "aggressive":
+        blue_agent = AggressiveAgent(team="blue", system_prompt=blue_strategy.get("system_prompt", ""))
+    elif blue_type == "siege":
+        blue_agent = SiegeAgent(team="blue", system_prompt=blue_strategy.get("system_prompt", ""))
     else:
         blue_agent = RandomAgent(team="blue", system_prompt=blue_strategy.get("system_prompt", ""))
         
     # Red Agent
     if opponent_path:
         # If yaml provided, use VolcAgent (if key present) or Scripted
+        red_type = red_strategy.get("type", "scripted")
+        
         if "api_key" in red_strategy:
              red_agent = VolcAgent(
                 team="red",
@@ -87,6 +95,10 @@ def fight(
                 api_key=red_strategy.get("api_key", ""),
                 debug=debug
             )
+        elif red_type == "aggressive":
+             red_agent = AggressiveAgent(team="red", system_prompt=red_strategy.get("system_prompt", ""))
+        elif red_type == "siege":
+             red_agent = SiegeAgent(team="red", system_prompt=red_strategy.get("system_prompt", ""))
         else:
             red_agent = ScriptedAgent(team="red")
     else:

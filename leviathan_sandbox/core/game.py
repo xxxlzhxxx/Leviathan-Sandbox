@@ -14,7 +14,7 @@ from leviathan_sandbox.core.objects.wall.entity import Wall
 from leviathan_sandbox.core.objects.turret.entity import Turret
 
 # Constants
-GRID_WIDTH = 20  # X axis: 0-9 (Blue), 10-19 (Red)
+GRID_WIDTH = 24  # 3 (Base) + 18 (Battlefield) + 3 (Base)
 GRID_HEIGHT = 3  # Y axis: 0-2 (Three Lanes)
 INITIAL_MANA = 100 # Total resources per player for the whole match
 BASE_HP = 500    # Lower HP for faster games (was 3000)
@@ -40,17 +40,17 @@ class Game:
         self.winner = None
         
         # Initialize Bases
-        # Blue Base: x=0, y=0-2 (3x1)
+        # Blue Base: x=0, y=0-2 (3x3)
         blue_base = Base(id="blue_base", team="blue", x=0, y=0, hp=BASE_HP)
-        # Red Base: x=19, y=0-2 (3x1)
-        red_base = Base(id="red_base", team="red", x=GRID_WIDTH - 1, y=0, hp=BASE_HP)
+        # Red Base: x=21, y=0-2 (3x3)
+        red_base = Base(id="red_base", team="red", x=GRID_WIDTH - 3, y=0, hp=BASE_HP)
         
         self.entities.append(blue_base)
         self.entities.append(red_base)
 
         self.players = {
-            "blue": Player("blue", 5.0, blue_base, ["knight", "archer", "wall"]), # Start with 5 mana
-            "red": Player("red", 5.0, red_base, ["goblin", "orc", "turret"])
+            "blue": Player("blue", 5.0, blue_base, ["knight", "archer", "wall", "catapult"]), # Start with 5 mana
+            "red": Player("red", 5.0, red_base, ["goblin", "orc", "turret", "catapult"])
         }
         
         self.last_turn_snapshot = [] # List[Entity] snapshot from previous turn

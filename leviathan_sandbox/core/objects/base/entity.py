@@ -9,7 +9,7 @@ class Base(Building):
             max_hp=hp, # Should match initial HP
             x=x,
             y=y,
-            width=1,
+            width=3,
             height=3,
             type="base",
             subtype="base",
