@@ -405,10 +405,23 @@ class Game:
             atk_cooldown = getattr(unit, 'attack_speed', 1)
             
             if intent == "attack" and target_unit:
-                dist = self._dist(unit, target_unit)
-                # Check if in range (considering size roughly)
-                # Let's use simple center distance for now
-                if dist <= atk_range:
+                # Robust Edge Distance Check
+                x_dist = 0
+                if unit.x + unit.width <= target_unit.x:
+                    x_dist = target_unit.x - (unit.x + unit.width)
+                elif target_unit.x + target_unit.width <= unit.x:
+                    x_dist = unit.x - (target_unit.x + target_unit.width)
+                
+                y_dist = 0
+                if unit.y + unit.height <= target_unit.y:
+                    y_dist = target_unit.y - (unit.y + unit.height)
+                elif target_unit.y + target_unit.height <= unit.y:
+                    y_dist = unit.y - (target_unit.y + target_unit.height)
+                
+                import math
+                edge_dist = math.sqrt(x_dist**2 + y_dist**2)
+                
+                if edge_dist <= atk_range + 0.1:
                     # Attack
                     if (self.tick_count - getattr(unit, 'last_attack_tick', 0)) >= atk_cooldown:
                         damage = getattr(unit, 'damage', 1)
