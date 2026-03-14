@@ -302,24 +302,43 @@ class Game:
         dist = math.sqrt(dx*dx + dy*dy)
         
         if dist <= delta:
-            # Reached (or overshot, just snap)
-            # Check collision at target
+            # Reached
             if not self._is_occupied_float(tx, ty, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
                 entity.x = tx
                 entity.y = ty
                 return True
-            return False # Blocked at target
+            return False 
         
         ratio = delta / dist
         next_x = entity.x + dx * ratio
         next_y = entity.y + dy * ratio
         
-        # Check collision
+        # Try Direct Move
         if 0 <= next_x < GRID_WIDTH and 0 <= next_y < GRID_HEIGHT:
              if not self._is_occupied_float(next_x, next_y, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
                  entity.x = next_x
                  entity.y = next_y
-                 return False 
+                 return False
+        
+        # Blocked! Try Sliding (Basic Obstacle Avoidance)
+        # If moving mostly Horizontal, try sliding Vertical
+        if abs(dx) > abs(dy): 
+            # Slide Y
+            for slide_dir in [1, -1]:
+                slide_y = entity.y + (delta * slide_dir)
+                if 0 <= slide_y < GRID_HEIGHT:
+                    if not self._is_occupied_float(entity.x, slide_y, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
+                        entity.y = slide_y
+                        return False
+        else:
+            # Slide X
+            for slide_dir in [1, -1]:
+                slide_x = entity.x + (delta * slide_dir)
+                if 0 <= slide_x < GRID_WIDTH:
+                    if not self._is_occupied_float(slide_x, entity.y, entity.width, entity.height, exclude_id=entity.id, pass_friendly_units=True, mover_team=entity.team):
+                        entity.x = slide_x
+                        return False
+                 
         return False
 
     def run_tick(self):
@@ -337,6 +356,7 @@ class Game:
         
         # Process Buildings (Simple Auto-Attack)
         for b in active_buildings:
+            b.action_state = "idle"
             attack_cooldown = getattr(b, 'attack_speed', 1)
             if (self.tick_count - getattr(b, 'last_attack_tick', 0)) < attack_cooldown: continue
             
@@ -355,6 +375,8 @@ class Game:
                 damage = getattr(b, 'damage', 5)
                 target.hp -= damage
                 b.last_attack_tick = self.tick_count
+                b.action_state = "attack"
+                b.target_id = target.id
 
         # Process Units (Move & Attack)
         for unit in active_units:
