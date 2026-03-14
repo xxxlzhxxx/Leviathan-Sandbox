@@ -1,0 +1,34 @@
+
+units:
+  knight:
+    prompt: "A pixel art sprite of a medieval knight in armor, side view facing right, slightly isometric, 2D game asset, 16-bit pixel art, white background, retro style, full body"
+    animation_prompt: "The knight is running towards the right, side view facing right, smooth looping animation, 2D game asset, 16-bit pixel art"
+    attack_prompt: "The knight swings his sword towards the right, side view facing right, attacking, dynamic action, smooth looping animation, 2D game asset"
+  archer:
+    prompt: "A pixel art sprite of an archer with a bow, side view facing right, slightly isometric, 2D game asset, 16-bit pixel art, white background, retro style, full body"
+    animation_prompt: "The archer is running towards the right, side view facing right, smooth looping animation, 2D game asset, 16-bit pixel art"
+    attack_prompt: "The archer draws the bow and shoots an arrow to the right, side view facing right, attacking, dynamic action, smooth looping animation, 2D game asset"
+  goblin:
+    prompt: "A pixel art sprite of a green goblin with a dagger, side view facing right, slightly isometric, 2D game asset, 16-bit pixel art, white background, retro style, full body"
+    animation_prompt: "The goblin is running fast towards the right, side view facing right, smooth looping animation, 2D game asset, 16-bit pixel art"
+    attack_prompt: "The goblin stabs forward to the right with a dagger, side view facing right, attacking, dynamic action, smooth looping animation, 2D game asset"
+  orc:
+    prompt: "A pixel art sprite of a fierce orc warrior with an axe, side view facing right, slightly isometric, 2D game asset, 16-bit pixel art, white background, retro style, full body"
+    animation_prompt: "The orc is charging forward to the right, heavy steps, side view facing right, smooth looping animation, 2D game asset, 16-bit pixel art"
+    attack_prompt: "The orc swings a heavy axe downward to the right, side view facing right, attacking, dynamic action, smooth looping animation, 2D game asset"
+  catapult:
+    prompt: "A pixel art sprite of a wooden catapult siege engine, side view facing right, slightly isometric, 2D game asset, 16-bit pixel art, white background, retro style"
+    animation_prompt: "The catapult wheels are rolling, moving to the right, side view facing right, smooth looping animation, 2D game asset"
+    attack_prompt: "The catapult launches a stone projectile to the right, recoil animation, attacking, dynamic action, smooth looping animation, side view facing right, 2D game asset"
+  wall:
+    prompt: "A pixel art sprite of a stone wall section, straight side view facing right, blocky, designed to tile seamlessly vertically with other walls, 2D game asset, 16-bit pixel art, white background, retro style"
+    animation_prompt: "Static stone wall, straight side view, slight dust particles, game sprite"
+    attack_prompt: "Static stone wall, straight side view" 
+  turret:
+    prompt: "A pixel art sprite of a defensive turret tower, side view facing right, slightly isometric, 2D game asset, 16-bit pixel art, white background, retro style"
+    animation_prompt: "Turret scanning left and right, mechanical movement, game sprite"
+    attack_prompt: "Turret firing projectiles rapidly to the right, muzzle flash, attacking, dynamic action, smooth looping animation, side view facing right, 2D game asset"
+  base:
+    prompt: "A massive pixel art sprite of a main castle base or command center, straight side view facing right, large 3x3 scale structure, 2D game asset, 16-bit pixel art, white background, retro style"
+    animation_prompt: "Massive castle flag waving in the wind, straight side view, game sprite"
+    attack_prompt: "Massive base defenses activating, subtle glow, straight side view, game sprite"
