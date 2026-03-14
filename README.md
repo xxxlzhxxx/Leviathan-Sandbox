@@ -14,28 +14,55 @@ Leviathan Sandbox is a turn-based Real-Time Strategy (RTS) game playground desig
 - **AI Agents**: Write strategies in Python or YAML, or use LLM-powered agents to command your troops.
 - **Web Replay**: Watch battles in a smooth, interpolated HTML5 viewer.
 
-## 🚀 Quick Start
+## 🚀 Quick Start (One-Liner)
 
-### 1. Installation
+**No Git required! Just copy & paste:**
 
 ```bash
-# Clone the repository
+curl -sSL https://raw.githubusercontent.com/your-username/leviathan-sandbox/main/setup_remote.sh | bash
+```
+
+After installation:
+```bash
+cd leviathan-sandbox
+./start.sh battle --opponent siege --render
+```
+
+---
+
+## 🛠 Git Installation
+
+If you prefer git:
+
+```bash
 git clone https://github.com/your-username/leviathan-sandbox.git
 cd leviathan-sandbox
+./install.sh
+```
 
-# Install dependencies
-pip install typer rich pyyaml volcenginesdkarkruntime openai rembg opencv-python-headless pillow numpy requests
+---
+
+## 🛠 Manual Installation
+
+### 1. Setup
+
+```bash
+# Install package in editable mode
+pip install -e .
 ```
 
 ### 2. Run a Battle
 
-Simulate a fight between the "Blue Assault" strategy and "Red Siege" strategy:
+Use the CLI to start a fight instantly:
 
 ```bash
-python3 -m leviathan_sandbox.cli.main fight strategies/blue_assault.yaml strategies/red_siege.yaml
-```
+# Quick battle against a Siege bot
+leviathan-sandbox battle --opponent siege --render
 
-This will generate a replay JSON file in `replays/`.
+# Custom AI Battle (Requires API Key)
+export ARK_API_KEY="your-key"
+leviathan-sandbox battle --my-prompt "Rush with mass Goblins" --opponent "aggressive" --render
+```
 
 ### 3. Watch the Replay
 
@@ -47,6 +74,46 @@ python3 -m http.server 8001
 ```
 
 Open [http://localhost:8001/](http://localhost:8001/) in your browser and select the generated `.json` file.
+
+## 🎮 How to Play
+
+### 1. Command Your Army (CLI)
+
+After installation, use the `battle` command to start a fight.
+
+**Quick Match:**
+Play against a built-in "Siege" bot that uses Turrets and Catapults.
+```bash
+./start.sh battle --opponent siege --render
+```
+
+**Custom AI Strategy (The Fun Part):**
+If you have a VolcEngine API Key (or OpenAI-compatible key), you can command your army using natural language!
+
+```bash
+export ARK_API_KEY="your-api-key"
+
+# Example: Rush Strategy
+./start.sh battle --my-prompt "Ignore defense! Spawn mass Knights and Archers in the middle lane. Rush the enemy base!" --opponent aggressive --render
+
+# Example: Defensive Strategy
+./start.sh battle --my-prompt "Build a wall of Turrets and protect them with Orcs. Use Catapults to snipe from afar." --opponent siege --render
+```
+
+### 2. Watch the Action
+
+The battle simulation runs in seconds, but you can watch the replay in two ways:
+
+**A. Video File (MP4)**
+The CLI will output a video file path (e.g., `replays/battle_12345.mp4`). Open it with any media player.
+
+**B. Interactive Web Viewer**
+For a better experience with tooltips and stats:
+```bash
+cd web
+python3 -m http.server 8001
+```
+Open [http://localhost:8001/](http://localhost:8001/) and load the `.json` file from the `replays/` folder.
 
 ## 🛠️ Features
 
