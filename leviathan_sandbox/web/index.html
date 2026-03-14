@@ -474,6 +474,16 @@
                     if (img && img.complete && img.naturalHeight !== 0) {
                         ctx.save();
                         ctx.translate(x + w/2, y + h); 
+                        
+                        // Handle Facing Flip
+                        // Blue assets face Right. Red assets face Left.
+                        let shouldFlip = false;
+                        if (e.facing) {
+                            if (e.team === 'blue' && e.facing === 'left') shouldFlip = true;
+                            if (e.team === 'red' && e.facing === 'right') shouldFlip = true;
+                        }
+                        if (shouldFlip) ctx.scale(-1, 1);
+                        
                         ctx.rotate(tilt);
                         ctx.translate(-(x + w/2), -(y + h));
                         

@@ -381,17 +381,18 @@ class Game:
                     unit.command = None
                     continue
 
-            # B. Default AI
+            # B. Default AI (Smart Targeting)
             if not unit.command:
-                # Find closest enemy
                 enemies = [e for e in self.entities if e.team != unit.team and e.hp > 0]
+                
+                # Priority: Units/Base > Buildings
+                high_value_targets = [e for e in enemies if e.type != "building" or e.subtype == "base"]
                 closest = None
                 min_dist = 999
-                
-                # Simple AI: Look for enemies in agro range (e.g. 8)
                 agro_range = 8.0
                 
-                for e in enemies:
+                # 1. Find High Value Target
+                for e in high_value_targets:
                     d = self._dist(unit, e)
                     if d <= agro_range and d < min_dist:
                         min_dist = d
@@ -401,19 +402,27 @@ class Game:
                     target_unit = closest
                     intent = "attack"
                 else:
-                    # Move to enemy base
-                    enemy_base_x = GRID_WIDTH - 2 if unit.team == "blue" else 1
-                    # Stay in lane if moving to base
-                    target_pos = (enemy_base_x, unit.y)
-                    intent = "move"
+                    # 2. If no high value target nearby, head to enemy base
+                    enemy_base = next((e for e in enemies if e.subtype == "base"), None)
+                    if enemy_base:
+                        target_unit = enemy_base
+                        intent = "attack"
+                    else:
+                        # 3. Just move forward
+                        enemy_base_x = GRID_WIDTH - 2 if unit.team == "blue" else 1
+                        target_pos = (enemy_base_x, unit.y)
+                        intent = "move"
 
             # Execute Intent
             speed = getattr(unit, 'move_speed', 0.5)
-            # Override speed for specific units if not set correctly in spawn
-            # (Ideally set in spawn_unit)
-            
             atk_range = getattr(unit, 'range', 1)
             atk_cooldown = getattr(unit, 'attack_speed', 1)
+            
+            # Update Facing
+            if target_unit:
+                unit.facing = "right" if target_unit.x >= unit.x else "left"
+            elif target_pos:
+                unit.facing = "right" if target_pos[0] >= unit.x else "left"
             
             if intent == "attack" and target_unit:
                 # Robust Edge Distance Check
@@ -450,9 +459,43 @@ class Game:
                 else:
                     # Move towards target
                     prev_x, prev_y = unit.x, unit.y
-                    self._move_towards(unit, target_unit.x, target_unit.y, speed)
+                    reached = self._move_towards(unit, target_unit.x, target_unit.y, speed)
+                    
                     if unit.x != prev_x or unit.y != prev_y:
                         unit.action_state = "move"
+                    elif not reached: # Blocked and didn't reach target
+                        # Check if blocked by Enemy Building
+                        nearby_walls = [e for e in self.entities if e.team != unit.team and e.type == "building" and e.hp > 0]
+                        blocker = None
+                        for w in nearby_walls:
+                            # Edge Dist Check
+                            wx_dist = 0
+                            if unit.x + unit.width <= w.x: wx_dist = w.x - (unit.x + unit.width)
+                            elif w.x + w.width <= unit.x: wx_dist = unit.x - (w.x + w.width)
+                            
+                            wy_dist = 0
+                            if unit.y + unit.height <= w.y: wy_dist = w.y - (unit.y + unit.height)
+                            elif w.y + w.height <= unit.y: wy_dist = unit.y - (w.y + w.height)
+                            
+                            w_edge_dist = math.sqrt(wx_dist**2 + wy_dist**2)
+                            
+                            if w_edge_dist <= atk_range + 0.5:
+                                blocker = w
+                                break
+                        
+                        if blocker and (self.tick_count - getattr(unit, 'last_attack_tick', 0)) >= atk_cooldown:
+                             # Attack Blocker
+                             damage = getattr(unit, 'damage', 1)
+                             bonus = getattr(unit, 'bonus_vs_building', 0)
+                             damage += bonus # Always building
+                             
+                             blocker.hp -= damage
+                             unit.last_attack_tick = self.tick_count
+                             unit.action_state = "attack"
+                             unit.target_id = blocker.id
+                             
+                             if blocker.hp <= 0:
+                                  self.players[unit.team].mana = min(self.players[unit.team].mana + 1.0, 10.0)
             
             elif intent == "move" and target_pos:
                 prev_x, prev_y = unit.x, unit.y
