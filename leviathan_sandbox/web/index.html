@@ -225,8 +225,8 @@
 
         const GRID_W = 24;
         const GRID_H = 3;
-        const CELL_SIZE = 80; 
-        const GRID_OFFSET_X = 20;
+        const CELL_SIZE = 50; 
+        const GRID_OFFSET_X = 60;
         const CANVAS_W = 1200 + (GRID_OFFSET_X * 2);
         const CANVAS_H = 300;
         
@@ -540,7 +540,7 @@
                         ctx.strokeRect(barX, y, barW, barH);
                         
                         // Mana Bar
-                        const playerMana = currentState.players[e.team].mana;
+                        const playerMana = state.players[e.team].mana;
                         const manaPct = Math.min(playerMana / 10.0, 1.0);
                         let manaX;
                         
