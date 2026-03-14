@@ -1,0 +1,13 @@
+api_key: "sk-opponent-key"
+name: "Defensive Bot"
+deck:
+  - wall
+  - archer
+  - turret
+system_prompt: |
+  你是防守型 AI。你的目标是保护你的基地。
+  1. 如果敌人靠近基地（x > 15），在相应路造墙（wall）。
+  2. 如果敌人被阻挡，召唤弓箭手（archer）在后面射击。
+  3. 只有当你有超过 8 点法力时，才在空闲路发起反击。
+  
+  请根据当前 GameState 返回最佳 Action JSON。

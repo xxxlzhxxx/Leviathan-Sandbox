@@ -3,11 +3,13 @@ import sys
 import yaml
 import json
 import time
+import os
 from pathlib import Path
 from rich.console import Console
 from rich.progress import track
 from leviathan_sandbox.core.game import Game
 from leviathan_sandbox.core.agent import RandomAgent, ScriptedAgent, VolcAgent, AggressiveAgent, SiegeAgent
+from leviathan_sandbox.core.renderer import HeadlessRenderer
 
 app = typer.Typer()
 console = Console()
@@ -17,9 +19,9 @@ def init(name: str = "my_bot"):
     """Initialize a new strategy file in strategies/ directory."""
     config = {
         "name": name,
-        "api_key": "sk-placeholder",
+        "type": "volc",
         "system_prompt": "You are a strategic genius.",
-        "deck": ["knight", "archer"]
+        "api_key": "YOUR_API_KEY_HERE" 
     }
     
     # Ensure strategies dir exists
@@ -31,13 +33,85 @@ def init(name: str = "my_bot"):
     console.print(f"[green]Created {filename}[/green]")
 
 @app.command()
+def battle(
+    my_prompt: str = typer.Option(None, help="Your strategy prompt string"),
+    opponent: str = typer.Option("aggressive", help="Opponent type (aggressive, siege, scripted, random) or prompt string"),
+    api_key: str = typer.Option(None, help="VolcEngine API Key (env: ARK_API_KEY)"),
+    render: bool = typer.Option(True, help="Render battle to video"),
+    debug: bool = False
+):
+    """Start a battle directly with prompts."""
+    
+    # Resolve API Key
+    final_api_key = api_key or os.environ.get("ARK_API_KEY")
+    
+    console.print(f"[bold blue]Starting simulation: You vs {opponent}[/bold blue]")
+    
+    game = Game()
+    
+    # Blue Agent (You)
+    if my_prompt:
+        if not final_api_key:
+            console.print("[red]Error: API Key required for custom prompt agent. Set ARK_API_KEY or use --api-key[/red]")
+            raise typer.Exit(1)
+        blue_agent = VolcAgent(team="blue", system_prompt=my_prompt, api_key=final_api_key, debug=debug)
+    else:
+        # Default to Aggressive if no prompt
+        blue_agent = AggressiveAgent(team="blue")
+
+    # Red Agent (Opponent)
+    if opponent == "aggressive":
+        red_agent = AggressiveAgent(team="red")
+    elif opponent == "siege":
+        red_agent = SiegeAgent(team="red")
+    elif opponent == "scripted":
+        red_agent = ScriptedAgent(team="red")
+    elif opponent == "random":
+        red_agent = RandomAgent(team="red")
+    else:
+        # Assume opponent string is a prompt
+        if not final_api_key:
+             console.print("[red]Error: API Key required for AI opponent. Set ARK_API_KEY or use --api-key[/red]")
+             raise typer.Exit(1)
+        red_agent = VolcAgent(team="red", system_prompt=opponent, api_key=final_api_key, debug=debug)
+
+    # Run Game Loop
+    for _ in track(range(game.max_turns * 10), description="Simulating..."):
+        game.tick(blue_agent, red_agent)
+        if game.winner:
+            break
+            
+    winner = game.winner.upper() if game.winner else "DRAW"
+    console.print(f"[bold green]Game Over! Winner: {winner}[/bold green]")
+    
+    # Save Replay
+    Path("replays").mkdir(exist_ok=True)
+    timestamp = int(time.time())
+    filename = f"replays/battle_{timestamp}.json"
+    
+    replay_data = game.get_replay_data()
+    with open(filename, "w") as f:
+        json.dump(replay_data, f)
+    console.print(f"Replay saved to: {filename}")
+    
+    # Render Video
+    if render:
+        console.print("[bold cyan]Rendering video...[/bold cyan]")
+        try:
+            renderer = HeadlessRenderer(Path(filename), Path(f"replays/battle_{timestamp}.mp4"))
+            video_path = renderer.render()
+            console.print(f"[bold green]Video available at: {video_path}[/bold green]")
+        except Exception as e:
+            console.print(f"[red]Rendering failed: {e}[/red]")
+
+@app.command()
 def fight(
     strategy_path: str, 
     opponent_path: str = typer.Argument(None, help="Path to opponent strategy file. If not provided, uses scripted_bot."), 
     use_volc: bool = False,
     debug: bool = False
 ):
-    """Start a battle simulation."""
+    """(Legacy) Start a battle using YAML strategy files."""
     if not Path(strategy_path).exists():
         console.print(f"[red]Strategy file {strategy_path} not found![/red]")
         raise typer.Exit(code=1)
@@ -105,58 +179,24 @@ def fight(
         # Default fallback
         red_agent = ScriptedAgent(team="red")
     
-    ticks = []
-    
-    # We use Game's own log system now
-    # The Game class internally logs to self.replay_log
-    
-    for _ in track(range(300), description="Simulating battle..."):
-        # 1. Ask Agents for Actions (Every 10 ticks = 1 second)
-        # In a real turn-based game, this might be every tick or phased.
-        # User said "Turn Based", so let's say every 10 ticks is a "Round" where they can act.
-        
-        if game.tick % 10 == 0:
-            # Blue Turn
-            blue_state = game.get_state("blue")
-            blue_action = blue_agent.decide(blue_state)
-            game.process_action("blue", blue_action)
-            
-            # Red Turn
-            red_state = game.get_state("red")
-            red_action = red_agent.decide(red_state)
-            game.process_action("red", red_action)
-
-        # 2. Run Engine Physics/Logic
-        game.run_tick()
-        
+    # Run Game Loop
+    for _ in track(range(game.max_turns * 10), description="Simulating..."):
+        game.tick(blue_agent, red_agent)
         if game.winner:
             break
             
-    # Save replay using game's method which produces cleaner output
+    winner = game.winner.upper() if game.winner else "DRAW"
+    console.print(f"[bold green]Game Over! Winner: {winner}[/bold green]")
     
-    # Generate filename: p1_p2_timestamp.json
-    p1_name = blue_strategy.get("name", "Blue").replace(" ", "")
-    p2_name = red_strategy.get("name", opponent_name).replace(" ", "")
-    timestamp = int(time.time())
-    
-    # Create replays directory if not exists (although we did mkdir, good to be safe)
+    # Save Replay
     Path("replays").mkdir(exist_ok=True)
+    timestamp = int(time.time())
+    filename = f"replays/{blue_strategy.get('name', 'Blue')}_{opponent_name}_{timestamp}.json".replace(" ", "")
     
-    replay_filename = f"replays/{p1_name}_{p2_name}_{timestamp}.json"
-    
-    game.save_replay(replay_filename)
-        
-    console.print(f"[green]Simulation complete! Winner: {game.winner}[/green]")
-    console.print(f"[green]Saved to {replay_filename}[/green]")
-    
-    # Mock Upload
-    console.print("[yellow]Uploading battle results to server...[/yellow]")
-    # In reality: requests.post("https://api.coa.com/upload", files=...)
-    time.sleep(1) 
-    mock_url = f"https://viewer.coa.com/?id={game.winner}_victory_{timestamp}"
-    console.print(f"[bold blue]Battle Replay Available at:[/bold blue] {mock_url}")
-    
-    console.print("Open web/index.html to view the battle locally.")
+    replay_data = game.get_replay_data()
+    with open(filename, "w") as f:
+        json.dump(replay_data, f)
+    console.print(f"Replay saved to: {filename}")
 
 if __name__ == "__main__":
     app()

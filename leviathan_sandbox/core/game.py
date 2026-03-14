@@ -1,9 +1,9 @@
-import json
 import random
-from typing import List, Dict, Tuple, Optional
-from dataclasses import dataclass, asdict
-from leviathan_sandbox.core.protocol import GameState, PlayerState, EntityState, Action
-from leviathan_sandbox.core.objects.base_entity import Entity, Unit, Building
+import time
+import json
+from typing import List, Dict, Optional, Any
+from dataclasses import asdict
+from leviathan_sandbox.core.protocol import GameState, EntityState, PlayerState, Action
 from leviathan_sandbox.core.objects.base.entity import Base
 from leviathan_sandbox.core.objects.knight.entity import Knight
 from leviathan_sandbox.core.objects.archer.entity import Archer
@@ -13,132 +13,84 @@ from leviathan_sandbox.core.objects.catapult.entity import Catapult
 from leviathan_sandbox.core.objects.wall.entity import Wall
 from leviathan_sandbox.core.objects.turret.entity import Turret
 
-# Constants
 GRID_WIDTH = 24  # 3 (Base) + 18 (Battlefield) + 3 (Base)
-GRID_HEIGHT = 3  # Y axis: 0-2 (Three Lanes)
-INITIAL_MANA = 100 # Total resources per player for the whole match
-BASE_HP = 500    # Lower HP for faster games (was 3000)
-BASE_DECAY = 5   # HP loss per DECAY_INTERVAL
-DECAY_INTERVAL = 10 # Ticks between decay
-TICK_RATE = 10
-GAME_DURATION = 200 # 200 ticks max (20 seconds)
-MANA_REGEN = 0.5 # Mana per turn
-SUDDEN_DEATH_START = 150 # Start sudden death at tick 150
+GRID_HEIGHT = 3
+GAME_DURATION = 200 # Ticks
+MANA_REGEN = 0.1 # Per tick
+BASE_HP = 1000
+BASE_DECAY = 1 # Per decay interval
+DECAY_INTERVAL = 10
+SUDDEN_DEATH_START = 150
 
-@dataclass
 class Player:
-    team: str
-    mana: float # Use float for regen
-    base: Building
-    deck: List[str] # Available cards
+    def __init__(self, team: str, mana: float, base: Base, deck: List[str]):
+        self.team = team
+        self.mana = mana
+        self.base = base
+        self.deck = deck
 
 class Game:
     def __init__(self):
-        self.tick = 0
-        self.entities: List[Entity] = []
+        self.tick_count = 0
+        self.max_turns = GAME_DURATION
+        self.entities = []
         self.replay_log = []
         self.winner = None
+        self.last_turn_snapshot = []
         
-        # Initialize Bases
         # Blue Base: x=0, y=0-2 (3x3)
         blue_base = Base(id="blue_base", team="blue", x=0, y=0, hp=BASE_HP)
         # Red Base: x=21, y=0-2 (3x3)
         red_base = Base(id="red_base", team="red", x=GRID_WIDTH - 3, y=0, hp=BASE_HP)
         
-        self.entities.append(blue_base)
-        self.entities.append(red_base)
-
         self.players = {
-            "blue": Player("blue", 5.0, blue_base, ["knight", "archer", "wall", "catapult"]), # Start with 5 mana
+            "blue": Player("blue", 5.0, blue_base, ["knight", "archer", "wall", "catapult"]),
             "red": Player("red", 5.0, red_base, ["goblin", "orc", "turret", "catapult"])
         }
         
-        self.last_turn_snapshot = [] # List[Entity] snapshot from previous turn
+        self.entities.append(blue_base)
+        self.entities.append(red_base)
 
     def get_grid_view(self, team: str) -> List[str]:
-        """Generates a 3x20 ASCII grid.
-        Rows are lanes (0, 1, 2).
-        Chars: 
-          . = Empty
-          K/A/G/O = Unit (Upper=Blue, Lower=Red)
-          W/T = Building
-          B = Base
-        """
         grid = [['.' for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
         
-        # Mapping
-        # Blue: Uppercase, Red: Lowercase
-        # Knight -> K/k
-        # Archer -> A/a
-        # Goblin -> G/g
-        # Orc -> O/o
-        # Catapult -> C/c
-        # Wall -> W/w
-        # Turret -> T/t
-        # Base -> B/b
-        
         char_map = {
-            "knight": "K", "archer": "A", "goblin": "G", "orc": "O",
-            "catapult": "C",
+            "knight": "K", "archer": "A", "goblin": "G", "orc": "O", "catapult": "C",
             "wall": "W", "turret": "T", "base": "B"
         }
         
         for e in self.entities:
-            # Determine char
-            base_char = char_map.get(e.subtype, "?")
+            if e.hp <= 0: continue
+            char = char_map.get(e.subtype, "?")
             if e.team == "red":
-                base_char = base_char.lower()
+                char = char.lower()
             
-            # Place on grid
-            # Entities can be > 1x1 (Base is 3x1)
+            # Entity might be larger than 1x1
             for dy in range(e.height):
                 for dx in range(e.width):
-                    if 0 <= e.y + dy < GRID_HEIGHT and 0 <= e.x + dx < GRID_WIDTH:
-                        grid[e.y + dy][e.x + dx] = base_char
-        
-        # Convert to strings
+                    cx, cy = e.x + dx, e.y + dy
+                    if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
+                        grid[cy][cx] = char
+                        
         return ["".join(row) for row in grid]
 
     def get_diff_logs(self) -> List[str]:
-        """Simple diff between self.last_turn_snapshot and current entities."""
-        # TODO: A real diff would track ID positions.
-        # For now, let's just return key events logged during run_tick?
-        # Actually, comparing positions is better.
-        
-        changes = []
-        
-        # Build dicts by ID
-        old_map = {e.id: e for e in self.last_turn_snapshot}
-        new_map = {e.id: e for e in self.entities}
-        
-        # Check spawned
-        for eid, e in new_map.items():
-            if eid not in old_map:
-                changes.append(f"{e.team} {e.subtype} spawned at ({e.x}, {e.y})")
-        
-        # Check died
-        for eid, e in old_map.items():
-            if eid not in new_map and e.type != "base": # Base doesn't die in entity list usually
-                changes.append(f"{e.team} {e.subtype} died at ({e.x}, {e.y})")
-        
-        # Check moved/damaged (optional, might be too verbose)
-        # Let's just track spawn/die for high level context
-        
-        return changes
+        logs = []
+        # Compare self.entities with self.last_turn_snapshot
+        # Simplified: just log events (attack, death)
+        # But we don't have event log stored.
+        # Let's return empty for now or implement event logging later.
+        return []
 
     def get_state(self, team: str) -> GameState:
-        """Generates a serialized GameState for a specific team (Agent view)."""
-        player = self.players[team]
         opponent_team = "red" if team == "blue" else "blue"
+        player = self.players[team]
         opponent = self.players[opponent_team]
         
         entity_states = []
         for e in self.entities:
-            # FoW Logic could be here (e.g. only visible if in range)
-            # For now, full visibility
+            if e.hp <= 0: continue
             
-            # Map Entity -> EntityState
-            # Handle potential missing attributes safely
             damage = getattr(e, 'damage', 0)
             range_val = getattr(e, 'range', 0)
             speed = getattr(e, 'move_speed', 0)
@@ -161,7 +113,7 @@ class Game:
             entity_states.append(es)
             
         return GameState(
-            turn=self.tick,
+            turn=self.tick_count,
             max_turns=GAME_DURATION,
             my_team=team,
             opponent_team=opponent_team,
@@ -176,14 +128,13 @@ class Game:
             ),
             opponent=PlayerState(
                 team=opponent_team,
-                mana=int(opponent.mana), # Hidden info? Maybe estimate?
+                mana=int(opponent.mana), 
                 base_hp=opponent.base.hp,
-                deck=opponent.deck # Hidden deck?
+                deck=opponent.deck 
             ),
             grid_view=self.get_grid_view(team),
             last_turn_changes=self.get_diff_logs()
         )
-
 
     def process_action(self, team: str, action: Action):
         """Processes a single action from an agent."""
@@ -191,8 +142,6 @@ class Game:
             return True
             
         if action.type == "spawn":
-            # Map card_id to unit type
-            # Validation handled inside spawn_unit
             return self.spawn_unit(team, action.card_id, action.y)
             
         if action.type == "build":
@@ -207,31 +156,25 @@ class Game:
             if e.id == exclude_id or e.hp <= 0:
                 continue
             
-            # Allow units to overlap with ANY friendly entity (units or buildings)
             if ignore_team and e.team == ignore_team:
                 continue
 
-            # Check overlap
             if (x < e.x + e.width and x + width > e.x and
                 y < e.y + e.height and y + height > e.y):
                 return True
         return False
 
     def spawn_unit(self, team: str, unit_type: str, lane: int):
-        """Spawns a unit from the base into a specific lane (y-coordinate)."""
         player = self.players[team]
         
-        # Cost check (Simple hardcoded costs for now)
         costs = {"knight": 3, "archer": 4, "goblin": 2, "orc": 5, "catapult": 5}
         cost = costs.get(unit_type, 3)
         
         if player.mana < cost:
             return False
             
-        # Spawn Position
-        # Blue spawns at x=1, Red at x=18
         spawn_x = 1 if team == "blue" else GRID_WIDTH - 2
-        spawn_y = lane # 0, 1, or 2
+        spawn_y = lane 
         
         if not (0 <= spawn_y < GRID_HEIGHT):
             return False
@@ -241,8 +184,7 @@ class Game:
 
         player.mana -= cost
         
-        # Instantiate correct class
-        unit_id = f"{team}_u_{self.tick}_{random.randint(1000,9999)}"
+        unit_id = f"{team}_u_{self.tick_count}_{random.randint(1000,9999)}"
         unit = None
         
         if unit_type == "knight":
@@ -262,12 +204,8 @@ class Game:
         return False
 
     def build_structure(self, team: str, building_type: str, x: int, y: int):
-        """Builds a structure. Validates placement area."""
         player = self.players[team]
         
-        # Construction Zone: First 5 cols from base
-        # Blue: x in [1, 5]
-        # Red: x in [14, 18] (19 is base)
         valid_zone = False
         if team == "blue" and 1 <= x <= 5:
             valid_zone = True
@@ -277,7 +215,6 @@ class Game:
         if not valid_zone:
             return False
             
-        # Cost
         costs = {"wall": 2, "turret": 5}
         cost = costs.get(building_type, 5)
         
@@ -289,8 +226,7 @@ class Game:
             
         player.mana -= cost
         
-        # Instantiate correct class
-        build_id = f"{team}_b_{self.tick}_{random.randint(1000,9999)}"
+        build_id = f"{team}_b_{self.tick_count}_{random.randint(1000,9999)}"
         building = None
         
         if building_type == "wall":
@@ -305,59 +241,41 @@ class Game:
 
     def run_tick(self):
         from copy import deepcopy
-        # Snapshot state
         self.last_turn_snapshot = deepcopy(self.entities)
         
-        self.tick += 1
+        self.tick_count += 1
         
-        # 0. Base Decay & Mana Regen
-        is_sudden_death = self.tick >= SUDDEN_DEATH_START
+        is_sudden_death = self.tick_count >= SUDDEN_DEATH_START
         current_decay = BASE_DECAY * 5 if is_sudden_death else BASE_DECAY
 
         for p in self.players.values():
-            if self.tick % DECAY_INTERVAL == 0:
+            if self.tick_count % DECAY_INTERVAL == 0:
                 p.base.hp -= current_decay
             
-            p.mana = min(p.mana + MANA_REGEN, 10.0) # Cap at 10
+            p.mana = min(p.mana + MANA_REGEN, 10.0) 
             if p.base.hp <= 0:
                 p.base.hp = 0
 
-        # 1. AI Logic (Handled externally via process_action now)
-        # But units still need to move/attack automatically (Engine Logic)
-        
-        # 2. Unit & Building Logic (Combat)
-        # Turrets and Units can attack.
-        # Filter attackers: Units + Buildings with 'attack' function
         attackers = [e for e in self.entities if (e.type == "unit" or (e.type == "building" and getattr(e, 'function', '') == 'attack')) and e.hp > 0]
         
         for attacker in attackers:
-            # Check attack cooldown / move speed
-            # For buildings, move_speed could be re-interpreted as attack_speed (ticks per attack)
             speed = getattr(attacker, 'move_speed', 1)
-            # Default speed 1 if not set
             if speed < 1: speed = 1
             
-            if (self.tick - getattr(attacker, 'last_move_tick', 0)) < speed:
+            if (self.tick_count - getattr(attacker, 'last_move_tick', 0)) < speed:
                 continue 
             
-            # Find target
             enemies = [e for e in self.entities if e.team != attacker.team and e.hp > 0]
             target = None
             min_dist = 999
             
-            # Forward direction (only for movement)
             dx_dir = 1 if attacker.team == "blue" else -1
             
-            # Check for enemies in attack range
             attack_range = getattr(attacker, 'range', 0)
-            # Some buildings might not have range attribute set in base_entity, check subclass
             if attacker.type == "building" and not hasattr(attacker, 'range'):
-                 # Turret defaults? Should be in entity definition.
-                 # Let's assume 3 if missing for safety
                  attack_range = 3
             
             for e in enemies:
-                # Closest point on entity e to attacker
                 ex_closest = max(e.x, min(attacker.x, e.x + e.width - 1))
                 ey_closest = max(e.y, min(attacker.y, e.y + e.height - 1))
                 
@@ -368,53 +286,42 @@ class Game:
                         target = e
             
             if target:
-                # Attack
                 damage = getattr(attacker, 'damage', 0)
-                # Turret damage fix
-                if attacker.type == "building" and damage == 0: damage = 5 # Fallback
+                if attacker.type == "building" and damage == 0: damage = 5 
                 
-                # Bonus Damage Logic
                 bonus_vs_building = getattr(attacker, 'bonus_vs_building', 0)
                 if target.type == "building" or target.type == "base":
                      damage += bonus_vs_building
 
                 target.hp -= damage
-                attacker.last_move_tick = self.tick # Reset cooldown
+                attacker.last_move_tick = self.tick_count 
                 
-                # Kill Reward
                 if target.hp <= 0:
-                     # Simple Kill Reward: +1 Mana
                      self.players[attacker.team].mana = min(self.players[attacker.team].mana + 1.0, 10.0)
 
             elif attacker.type == "unit":
-                # Move (Only units move)
                 next_x = attacker.x + dx_dir
-                next_y = attacker.y # Stay in lane usually
+                next_y = attacker.y 
                 
-                # Check bounds
                 if 0 <= next_x < GRID_WIDTH:
-                    # Check collision with ANY entity (friend or foe)
                     if not self._is_occupied(next_x, next_y, exclude_id=attacker.id, ignore_team=attacker.team):
                         attacker.x = next_x
                         attacker.y = next_y
-                        attacker.last_move_tick = self.tick
+                        attacker.last_move_tick = self.tick_count
                     else:
-                        pass # Blocked
+                        pass 
 
-        # 3. Cleanup Dead Entities
         self.entities = [e for e in self.entities if e.hp > 0 or e.type == "base"]
 
-        # 4. Check Win Condition
         blue_hp = self.players["blue"].base.hp
         red_hp = self.players["red"].base.hp
         
-        if blue_hp <= 0 or red_hp <= 0 or self.tick >= GAME_DURATION:
+        if blue_hp <= 0 or red_hp <= 0 or self.tick_count >= GAME_DURATION:
             if blue_hp > red_hp:
                 self.winner = "blue"
             elif red_hp > blue_hp:
                 self.winner = "red"
             else:
-                # HP is equal, check remaining mana (resources)
                 blue_mana = self.players["blue"].mana
                 red_mana = self.players["red"].mana
                 if blue_mana > red_mana:
@@ -424,9 +331,8 @@ class Game:
                 else:
                     self.winner = "draw"
         
-        # Log
         snapshot = {
-            "tick": self.tick,
+            "tick": self.tick_count,
             "entities": [asdict(e) for e in self.entities],
             "players": {
                 k: {"mana": v.mana, "hp": v.base.hp} for k, v in self.players.items()
@@ -434,19 +340,23 @@ class Game:
         }
         self.replay_log.append(snapshot)
 
-    def run_simulation(self):
-        print("Starting simulation...")
-        for _ in range(GAME_DURATION):
-            self.run_tick()
-            if self.winner:
-                print(f"Game Over! Winner: {self.winner}")
-                break
-        return self.replay_log
+    def tick(self, blue_agent, red_agent):
+        """Advances the game by one tick, including agent decisions."""
+        # 1. Agents Decide
+        state_blue = self.get_state("blue")
+        action_blue = blue_agent.decide(state_blue)
+        self.process_action("blue", action_blue)
+        
+        state_red = self.get_state("red")
+        action_red = red_agent.decide(state_red)
+        self.process_action("red", action_red)
+        
+        # 2. Engine Update
+        self.run_tick()
 
-    def save_replay(self, filename="replay.json"):
-        with open(filename, "w") as f:
-            json.dump({
-                "match_id": "match_3lane_v1",
-                "winner": self.winner,
-                "ticks": self.replay_log
-            }, f, indent=None) # Compact JSON
+    def get_replay_data(self):
+        return {
+            "match_id": f"battle_{int(time.time())}",
+            "ticks": self.replay_log,
+            "winner": self.winner
+        }

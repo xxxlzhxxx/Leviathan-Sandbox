@@ -1,18 +1,13 @@
-# Python
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
+.DS_Store
 .venv/
 venv/
-env/
-
-# Project Specific
+*.egg-info/
 replays/*.json
-!replays/.gitkeep
-strategies/*.yaml
-!strategies/my_bot.yaml
-!strategies/example_bot.yaml
-
-# Sensitive Data
-*.log
-.DS_Store
+replays/*.mp4
+tools/asset_pipeline/venv/
+web/assets_animated/*.png
+web/assets_animated/*.mp4
+# Keep .gitkeep in assets if needed, but ignore generated ones if they are reproducible
+# For now, let's keep generated assets committed as they are part of the demo
