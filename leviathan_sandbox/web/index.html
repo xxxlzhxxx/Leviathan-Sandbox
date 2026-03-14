@@ -406,7 +406,7 @@
                 const state = replayData.ticks[tickIndex];
                 const nextState = replayData.ticks[nextTickIndex];
 
-                const findEntity = (s, id) => s.entities.find(e => e.id === id);
+                const findEntity = (s, id) => s ? s.entities.find(e => e.id === id) : null;
                 const sortedEntities = [...state.entities].sort((a,b) => a.y - b.y);
 
                 sortedEntities.forEach(e => {
@@ -415,30 +415,10 @@
                     
                     const nextE = findEntity(nextState, e.id);
                     
-                    // Smart interpolation based on move_speed
-                    if (nextE && (nextE.x !== e.x || nextE.y !== e.y)) {
-                        // Unit is moving this tick - smooth interpolation
+                    // Simple robust interpolation
+                    if (nextE) {
                         drawX = e.x + (nextE.x - e.x) * alpha;
                         drawY = e.y + (nextE.y - e.y) * alpha;
-                    } else if (e.type === 'unit' && e.move_speed > 1) {
-                        // Unit with slow speed - interpolate within movement cycle
-                        const moveInterval = e.move_speed;
-                        const tickInCycle = tickIndex % moveInterval;
-                        
-                        // Check if unit moved in a recent tick
-                        for (let i = 1; i < moveInterval && tickIndex - i >= 0; i++) {
-                            const prevTick = replayData.ticks[tickIndex - i];
-                            if (prevTick) {
-                                const prevEntity = prevTick.entities.find(pe => pe.id === e.id);
-                                if (prevEntity && (prevEntity.x !== e.x || prevEntity.y !== e.y)) {
-                                    // Found previous movement, interpolate
-                                    const progress = (tickInCycle + alpha) / moveInterval;
-                                    drawX = prevEntity.x + (e.x - prevEntity.x) * progress;
-                                    drawY = prevEntity.y + (e.y - prevEntity.y) * progress;
-                                    break;
-                                }
-                            }
-                        }
                     }
                     
                     let action = 'idle';
