@@ -263,7 +263,7 @@ def run():
     # Process all units defined in config
     # print(f"Starting asset generation for all units: {list(config['units'].keys())}")
     
-    target_units = ["wall", "base"]
+    target_units = ["base"]
     print(f"Starting asset generation for targets: {target_units}")
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:

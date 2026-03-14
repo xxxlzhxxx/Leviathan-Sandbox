@@ -29,6 +29,6 @@ units:
     animation_prompt: "Turret scanning left and right, mechanical movement, game sprite"
     attack_prompt: "Turret firing projectiles rapidly to the right, muzzle flash, attacking, dynamic action, smooth looping animation, side view facing right, 2D game asset"
   base:
-    prompt: "A massive pixel art sprite of a main castle base or command center, straight side view facing right, large 3x3 scale structure, 2D game asset, 16-bit pixel art, white background, retro style"
-    animation_prompt: "Massive castle flag waving in the wind, straight side view, game sprite"
-    attack_prompt: "Massive base defenses activating, subtle glow, straight side view, game sprite"
+    prompt: "A massive dark crystal summoning spire, with a giant glowing eye floating in the center, arcane runes, dark fantasy style, side view facing right, large 3x3 scale structure, 2D game asset, 16-bit pixel art, white background"
+    animation_prompt: "The giant eye is floating up and down slowly in the center of the crystal spire, magical energy pulsing, smooth looping animation, game sprite"
+    attack_prompt: "The floating eye flares up intensely and shoots a dark beam, the crystal spire glows, dynamic action, game sprite"
