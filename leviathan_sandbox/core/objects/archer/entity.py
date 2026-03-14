@@ -5,15 +5,15 @@ class Archer(Unit):
         super().__init__(
             id=id,
             team=team,
-            hp=60,
-            max_hp=60,
+            hp=30,  # Nerfed from 60 to be more fragile
+            max_hp=30,
             x=x,
             y=y,
             width=1,
             height=1,
             type="unit",
             subtype="archer",
-            damage=10,
-            range=3,
+            damage=15, # Buffed damage slightly
+            range=4,   # Increased range to compensate
             move_speed=2
         )
