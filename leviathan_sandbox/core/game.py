@@ -1,4 +1,3 @@
-import random
 import time
 import json
 from typing import List, Dict, Optional, Any
@@ -13,14 +12,15 @@ from leviathan_sandbox.core.objects.catapult.entity import Catapult
 from leviathan_sandbox.core.objects.wall.entity import Wall
 from leviathan_sandbox.core.objects.turret.entity import Turret
 
-GRID_WIDTH = 24  # 3 (Base) + 18 (Battlefield) + 3 (Base)
-GRID_HEIGHT = 3
-GAME_DURATION = 200 # Ticks
-MANA_REGEN = 0.1 # Per tick
+SUB_GRID = 10
+GRID_WIDTH = 24 * SUB_GRID  # 240
+GRID_HEIGHT = 3 * SUB_GRID  # 30
+GAME_DURATION = 500 # Ticks (Increase duration for more resolution)
+MANA_REGEN = 1 # Per tick
 BASE_HP = 1000
 BASE_DECAY = 1 # Per decay interval
 DECAY_INTERVAL = 10
-SUDDEN_DEATH_START = 150
+SUDDEN_DEATH_START = 400
 
 class Player:
     def __init__(self, team: str, mana: float, base: Base, deck: List[str]):
@@ -37,11 +37,18 @@ class Game:
         self.replay_log = []
         self.winner = None
         self.last_turn_snapshot = []
+        self.unit_counter = 0
+        self.build_counter = 0
         
-        # Blue Base: x=0, y=0-2 (3x3)
+        # Blue Base: x=0, y=0 (30x30)
         blue_base = Base(id="blue_base", team="blue", x=0, y=0, hp=BASE_HP)
-        # Red Base: x=21, y=0-2 (3x3)
-        red_base = Base(id="red_base", team="red", x=GRID_WIDTH - 3, y=0, hp=BASE_HP)
+        blue_base.width = 3 * SUB_GRID
+        blue_base.height = 3 * SUB_GRID
+        
+        # Red Base: x=210, y=0 (30x30)
+        red_base = Base(id="red_base", team="red", x=GRID_WIDTH - (3 * SUB_GRID), y=0, hp=BASE_HP)
+        red_base.width = 3 * SUB_GRID
+        red_base.height = 3 * SUB_GRID
         
         self.players = {
             "blue": Player("blue", 5.0, blue_base, ["knight", "archer", "wall", "catapult"]),
@@ -52,7 +59,8 @@ class Game:
         self.entities.append(red_base)
 
     def get_grid_view(self, team: str) -> List[str]:
-        grid = [['.' for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
+        # Return a coarse 24x3 grid for the agent's summary
+        grid = [['.' for _ in range(24)] for _ in range(3)]
         
         char_map = {
             "knight": "K", "archer": "A", "goblin": "G", "orc": "O", "catapult": "C",
@@ -65,13 +73,16 @@ class Game:
             if e.team == "red":
                 char = char.lower()
             
-            # Entity might be larger than 1x1
-            start_x = int(e.x)
-            start_y = int(e.y)
-            for dy in range(e.height):
-                for dx in range(e.width):
-                    cx, cy = start_x + dx, start_y + dy
-                    if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
+            # Downsample coordinates
+            gx = int(e.x // SUB_GRID)
+            gy = int(e.y // SUB_GRID)
+            gw = int(max(1, e.width // SUB_GRID))
+            gh = int(max(1, e.height // SUB_GRID))
+            
+            for dy in range(gh):
+                for dx in range(gw):
+                    cx, cy = gx + dx, gy + dy
+                    if 0 <= cx < 24 and 0 <= cy < 3:
                         grid[cy][cx] = char
                         
         return ["".join(row) for row in grid]
@@ -171,7 +182,7 @@ class Game:
                         target = next((e for e in self.entities if e.id == cmd.target_unit_id), None)
                         if target and target.hp > 0:
                             # Check Range (Strict validation)
-                            dist = self._dist(unit, target)
+                            dist = self._edge_dist(unit, target)
                             atk_range = getattr(unit, 'range', 1)
                             if dist <= atk_range + 0.5: # Small buffer for float precision
                                 is_valid = True
@@ -203,9 +214,10 @@ class Game:
             if e.id == exclude_id or e.hp <= 0: continue
             if ignore_team and e.team == ignore_team: continue
             
+            # 1. 完全实现友军穿透（包括单位、建筑、大本营）
             if pass_friendly_units and mover_team:
-                if e.team == mover_team and e.type == "unit":
-                    continue
+                if e.team == mover_team:
+                    continue # 忽略所有友方物体
             
             if (x < e.x + e.width and x + width > e.x and
                 y < e.y + e.height and y + height > e.y):
@@ -218,37 +230,45 @@ class Game:
         cost = costs.get(unit_type, 3)
         if player.mana < cost: return False
             
-        # Default spawn outside base
-        default_x = 3 if team == "blue" else (GRID_WIDTH - 4)
+        # Default spawn outside base (30 for blue, 200 for red)
+        default_x = 3 * SUB_GRID if team == "blue" else (GRID_WIDTH - (4 * SUB_GRID))
         spawn_x = default_x
         
         # Allow spawning near base (Home Zone)
         if x is not None:
             if team == "blue":
-                if 0 <= x < 8: spawn_x = int(x)
+                if 0 <= x < 8: spawn_x = int(x * SUB_GRID)
             else:
-                if (GRID_WIDTH - 8) <= x < GRID_WIDTH: spawn_x = int(x)
+                if (24 - 8) <= x < 24: spawn_x = int(x * SUB_GRID)
         
-        spawn_y = int(lane)
+        spawn_y = int(lane * SUB_GRID)
         if not (0 <= spawn_y < GRID_HEIGHT): return False
             
-        if self._is_occupied(spawn_x, spawn_y, 1, 1, ignore_team=team): return False
+        # Units are 10x10
+        if self._is_occupied(spawn_x, spawn_y, SUB_GRID, SUB_GRID, ignore_team=team): return False
 
         player.mana -= cost
-        unit_id = f"{team}_u_{self.tick_count}_{random.randint(1000,9999)}"
+        self.unit_counter += 1
+        unit_id = f"{team}_u_{self.tick_count}_{self.unit_counter}"
         unit = None
         
-        # Speed: Ticks per move (Lower is faster)
+        # Speed: Units per tick (Higher is faster)
+        # Range: Units (10 per big tile)
         if unit_type == "knight":
-            unit = Knight(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 2
+            unit = Knight(id=unit_id, team=team, x=spawn_x, y=spawn_y)
+            unit.move_speed = 5; unit.range = 10; unit.width = 10; unit.height = 10
         elif unit_type == "archer":
-            unit = Archer(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 2
+            unit = Archer(id=unit_id, team=team, x=spawn_x, y=spawn_y)
+            unit.move_speed = 5; unit.range = 40; unit.width = 10; unit.height = 10
         elif unit_type == "goblin":
-            unit = Goblin(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 1
+            unit = Goblin(id=unit_id, team=team, x=spawn_x, y=spawn_y)
+            unit.move_speed = 10; unit.range = 10; unit.width = 10; unit.height = 10
         elif unit_type == "orc":
-            unit = Orc(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 3
+            unit = Orc(id=unit_id, team=team, x=spawn_x, y=spawn_y)
+            unit.move_speed = 3; unit.range = 10; unit.width = 10; unit.height = 10
         elif unit_type == "catapult":
-            unit = Catapult(id=unit_id, team=team, x=spawn_x, y=spawn_y); unit.move_speed = 3
+            unit = Catapult(id=unit_id, team=team, x=spawn_x, y=spawn_y)
+            unit.move_speed = 3; unit.range = 80; unit.width = 10; unit.height = 10
             
         if unit:
             self.entities.append(unit)
@@ -258,23 +278,29 @@ class Game:
     def build_structure(self, team: str, building_type: str, x: int, y: int):
         player = self.players[team]
         valid_zone = False
-        # Build Zone (Defensive Area)
-        # Blue: 4-8 (Base 0-3)
-        # Red: 16-20 (Base 21-24)
+        # Build Zone (Defensive Area) - scaled by 10
         if team == "blue" and 4 <= x <= 8: valid_zone = True
-        elif team == "red" and (GRID_WIDTH - 8) <= x <= (GRID_WIDTH - 4): valid_zone = True
+        elif team == "red" and (24 - 8) <= x <= (24 - 4): valid_zone = True
         if not valid_zone: return False
         
         costs = {"wall": 2, "turret": 5}
         cost = costs.get(building_type, 5)
         if player.mana < cost: return False
 
-        if self._is_occupied(x, y): return False
+        bx, by = int(x * SUB_GRID), int(y * SUB_GRID)
+        if self._is_occupied(bx, by, SUB_GRID, SUB_GRID): return False
+        
         player.mana -= cost
-        build_id = f"{team}_b_{self.tick_count}_{random.randint(1000,9999)}"
+        self.build_counter += 1
+        build_id = f"{team}_b_{self.tick_count}_{self.build_counter}"
         building = None
-        if building_type == "wall": building = Wall(id=build_id, team=team, x=x, y=y)
-        elif building_type == "turret": building = Turret(id=build_id, team=team, x=x, y=y)
+        if building_type == "wall": 
+            building = Wall(id=build_id, team=team, x=bx, y=by)
+            building.width = 10; building.height = 10
+        elif building_type == "turret": 
+            building = Turret(id=build_id, team=team, x=bx, y=by)
+            building.width = 10; building.height = 10; building.range = 60
+            
         if building:
             self.entities.append(building)
             return True
@@ -293,29 +319,33 @@ class Game:
         return x_dist + y_dist # Manhattan distance (Integer)
 
     def _move_step(self, unit, tx, ty):
+        # 2. 严格限制 X 轴直线移动，禁止跨道 (Y 轴移动)
         dx = 0
         if tx > unit.x: dx = 1
         elif tx < unit.x: dx = -1
         
-        dy = 0
-        if ty > unit.y: dy = 1
-        elif ty < unit.y: dy = -1
+        if dx == 0: return False
+
+        speed = getattr(unit, 'move_speed', 1)
+        moved = False
         
-        # Prioritize X (Lane Push)
-        if dx != 0:
+        # 丝滑移动：每回合移动 speed 个小格子，每步都检测碰撞
+        for _ in range(speed):
             next_x = unit.x + dx
-            if 0 <= next_x < GRID_WIDTH:
+            if 0 <= next_x <= GRID_WIDTH - unit.width:
+                # 检查碰撞
                 if not self._is_occupied(next_x, unit.y, unit.width, unit.height, exclude_id=unit.id, pass_friendly_units=True, mover_team=unit.team):
                     unit.x = next_x
-                    return True
+                    moved = True
+                    # 如果已经到达目标，提前停止
+                    if unit.x == tx: break
+                else:
+                    # 被挡住了，停止移动
+                    break
+            else:
+                break
         
-        if dy != 0:
-            next_y = unit.y + dy
-            if 0 <= next_y < GRID_HEIGHT:
-                if not self._is_occupied(unit.x, next_y, unit.width, unit.height, exclude_id=unit.id, pass_friendly_units=True, mover_team=unit.team):
-                    unit.y = next_y
-                    return True
-        return False
+        return moved
 
     def _smart_move_or_attack(self, unit, target, speed, atk_range, atk_cooldown):
         # 1. Attack Check
@@ -332,17 +362,21 @@ class Game:
                 unit.target_id = target.id
                 if target.hp <= 0:
                      self.players[unit.team].mana = min(self.players[unit.team].mana + 1, 10)
+            else:
+                # 冷却期间保持攻击姿态
+                unit.action_state = "attack"
+                unit.target_id = target.id
             return
 
         # 2. Move Check
-        last_move = getattr(unit, 'last_move_tick', 0)
-        if (self.tick_count - last_move) >= speed:
-            prev_x, prev_y = unit.x, unit.y
-            self._move_step(unit, target.x, target.y)
-            
-            if unit.x != prev_x or unit.y != prev_y:
-                unit.action_state = "move"
-                unit.last_move_tick = self.tick_count
+        # 现在每回合都会尝试移动，没有移动冷却，实现丝滑移动
+        prev_x = unit.x
+        self._move_step(unit, target.x, target.y)
+        
+        if unit.x != prev_x:
+            unit.action_state = "move"
+        else:
+            unit.action_state = "idle"
 
     def run_tick(self):
         from copy import deepcopy
@@ -350,7 +384,7 @@ class Game:
         self.tick_count += 1
         
         for p in self.players.values():
-            p.mana = min(p.mana + 1, 10) # +1 Integer Mana per turn
+            p.mana = int(min(p.mana + 1, 10)) # Force Integer Mana
             if p.base.hp <= 0: p.base.hp = 0
 
         active_units = [e for e in self.entities if e.hp > 0 and e.type == "unit"]
@@ -364,8 +398,8 @@ class Game:
             
             enemies = [e for e in self.entities if e.team != b.team and e.hp > 0]
             target = None
-            min_dist = 999
-            rng = getattr(b, 'range', 3)
+            min_dist = 9999 # Use large integer
+            rng = getattr(b, 'range', 3 * SUB_GRID)
             
             for e in enemies:
                 d = self._edge_dist(b, e)
@@ -382,7 +416,6 @@ class Game:
 
         # Process Units
         for unit in active_units:
-            unit.action_state = "idle"
             target_pos = None
             target_unit = None
             intent = "idle"
@@ -391,8 +424,11 @@ class Game:
             cmd = getattr(unit, 'command', None)
             if cmd:
                 if cmd.type == "move":
-                    if cmd.target_x is not None and cmd.target_y is not None:
-                        target_pos = (cmd.target_x, cmd.target_y)
+                    if cmd.target_x is not None:
+                        # Convert coarse x to small x if needed, but assume it's small x now
+                        # Or scale it if it looks like a coarse coordinate
+                        tx = cmd.target_x if cmd.target_x > 24 else cmd.target_x * SUB_GRID
+                        target_pos = (tx, unit.y)
                         intent = "move"
                 elif cmd.type == "attack":
                     t_unit = next((e for e in self.entities if e.id == cmd.target_unit_id), None)
@@ -403,31 +439,42 @@ class Game:
                         unit.command = None
                 elif cmd.type == "stop":
                     unit.command = None
+                    unit.action_state = "idle"
                     continue
 
-            # B. Default AI (Nearest Enemy)
+            # B. Default AI (Strict Lane Targeting)
             if not unit.command:
-                enemies = [e for e in self.entities if e.team != unit.team and e.hp > 0]
-                closest = None
-                min_dist = 999
+                # 优先攻击本路敌人
+                enemies_in_lane = [e for e in self.entities if e.team != unit.team and e.hp > 0 and (e.y <= unit.y < e.y + e.height)]
                 
-                for e in enemies:
-                    d = self._edge_dist(unit, e)
-                    if d < min_dist:
-                        min_dist = d
-                        closest = e
+                closest = None
+                min_dist = 9999
+                
+                if enemies_in_lane:
+                    for e in enemies_in_lane:
+                        d = self._edge_dist(unit, e)
+                        if d < min_dist:
+                            min_dist = d
+                            closest = e
+                else:
+                    # 如果本路没有敌人，寻找最近的敌人
+                    all_enemies = [e for e in self.entities if e.team != unit.team and e.hp > 0]
+                    for e in all_enemies:
+                        d = self._edge_dist(unit, e)
+                        if d < min_dist:
+                            min_dist = d
+                            closest = e
                 
                 if closest:
                     target_unit = closest
                     intent = "attack"
                 else:
-                    enemy_base_x = GRID_WIDTH - 2 if unit.team == "blue" else 1
+                    enemy_base_x = (GRID_WIDTH - (3 * SUB_GRID)) if unit.team == "blue" else 0
                     target_pos = (enemy_base_x, unit.y)
                     intent = "move"
 
             # Execute Intent
-            speed = getattr(unit, 'move_speed', 1)
-            atk_range = getattr(unit, 'range', 1)
+            atk_range = getattr(unit, 'range', SUB_GRID)
             atk_cooldown = getattr(unit, 'attack_speed', 1)
             
             # Update Facing
@@ -437,17 +484,19 @@ class Game:
                 unit.facing = "right" if target_pos[0] >= unit.x else "left"
             
             if intent == "attack" and target_unit:
-                self._smart_move_or_attack(unit, target_unit, speed, atk_range, atk_cooldown)
+                self._smart_move_or_attack(unit, target_unit, unit.move_speed, atk_range, atk_cooldown)
             elif intent == "move" and target_pos:
-                last_move = getattr(unit, 'last_move_tick', 0)
-                if (self.tick_count - last_move) >= speed:
-                    prev_x, prev_y = unit.x, unit.y
-                    self._move_step(unit, target_pos[0], target_pos[1])
-                    if unit.x != prev_x or unit.y != prev_y:
-                        unit.action_state = "move"
-                        unit.last_move_tick = self.tick_count
-                if unit.x == target_pos[0] and unit.y == target_pos[1] and unit.command:
+                prev_x = unit.x
+                self._move_step(unit, target_pos[0], target_pos[1])
+                if unit.x != prev_x:
+                    unit.action_state = "move"
+                else:
+                    unit.action_state = "idle"
+                
+                if unit.x == target_pos[0] and unit.command:
                     unit.command = None
+            else:
+                unit.action_state = "idle"
 
         self.entities = [e for e in self.entities if e.hp > 0 or e.type == "base"]
         
@@ -463,10 +512,34 @@ class Game:
                 elif self.players["red"].mana > self.players["blue"].mana: self.winner = "red"
                 else: self.winner = "draw"
         
+        # Robust Snapshotting
+        entities_snapshot = []
+        for e in self.entities:
+            edict = {
+                "id": e.id,
+                "team": e.team,
+                "hp": int(e.hp),
+                "max_hp": int(e.max_hp),
+                "x": int(e.x),
+                "y": int(e.y),
+                "width": int(e.width),
+                "height": int(e.height),
+                "type": e.type,
+                "subtype": e.subtype,
+                "action_state": getattr(e, 'action_state', 'idle'),
+                "facing": getattr(e, 'facing', 'right'),
+                "target_id": getattr(e, 'target_id', None),
+                "range": int(getattr(e, 'range', 0)),
+                "move_speed": int(getattr(e, 'move_speed', 0)),
+                "attack_speed": int(getattr(e, 'attack_speed', 1)),
+                "last_attack_tick": int(getattr(e, 'last_attack_tick', 0))
+            }
+            entities_snapshot.append(edict)
+
         snapshot = {
             "tick": self.tick_count,
-            "entities": [asdict(e) for e in self.entities],
-            "players": {k: {"mana": v.mana, "hp": v.base.hp} for k, v in self.players.items()}
+            "entities": entities_snapshot,
+            "players": {k: {"mana": int(v.mana), "hp": int(v.base.hp)} for k, v in self.players.items()}
         }
         self.replay_log.append(snapshot)
 

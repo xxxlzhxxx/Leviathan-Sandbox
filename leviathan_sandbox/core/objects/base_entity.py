@@ -22,6 +22,7 @@ class Unit(Entity):
     last_attack_tick: int = 0 
     last_move_tick: int = 0 # Added for integer movement cooldown
     target_id: Optional[str] = None
+    facing: str = "right" # "left" or "right"
     
     # Command State
     command: Optional[Any] = None # Stores active UnitCommand

@@ -7,9 +7,10 @@
 
 ## 2. Map & Lanes
 - Grid: 20 columns (x=0..19) x 3 lanes (y=0, 1, 2).
+- **STRICT RULE: You CANNOT place anything in enemy territory. Attempting to build/spawn outside your allowed zone will FAIL.**
 - Units move automatically towards the enemy base.
-- You can SPAWN units in your spawn zone (Blue: x=1, Red: x=18).
-- You can BUILD structures in your build zone (Blue: x=1-5, Red: x=14-18).
+- You can **ONLY SPAWN units in your spawn zone** (Blue: x=1, Red: x=18).
+- You can **ONLY BUILD structures in your build zone** (Blue: x=1-5, Red: x=14-18). **NEVER in enemy half.**
 
 ## 3. Cards & Stats
 - **knight** (Cost: 3): Melee unit. High HP (150), Speed 2. Good tank.

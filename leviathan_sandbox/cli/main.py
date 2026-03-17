@@ -118,6 +118,8 @@ def battle(
     opponent_id: str = typer.Option(None, help="ID of the opponent from 'list-opponents'"),
     api_key: str = typer.Option(None, help="VolcEngine API Key (env: ARK_API_KEY)"),
     render: bool = typer.Option(True, help="Render battle to video"),
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactive mode for coding agents"),
+    ai_interval: int = typer.Option(1, "--ai-interval", "-n", help="AI call interval: call AI every N turns to reduce API usage (default: 1, meaning every turn)"),
     debug: bool = False
 ):
     """Start a battle directly with prompts or opponent IDs."""
@@ -142,7 +144,7 @@ def battle(
              if not final_api_key:
                  console.print("[red]Error: API Key required for AI opponent. Set ARK_API_KEY[/red]")
                  raise typer.Exit(1)
-             red_agent = VolcAgent(team="red", system_prompt=data.get("prompt", ""), api_key=final_api_key, debug=debug)
+             red_agent = VolcAgent(team="red", system_prompt=data.get("prompt", ""), api_key=final_api_key, debug=debug, ai_call_interval=ai_interval)
         elif opp_type == "aggressive":
              red_agent = AggressiveAgent(team="red")
         elif opp_type == "siege":
@@ -167,27 +169,44 @@ def battle(
             if not final_api_key:
                  console.print("[red]Error: API Key required for AI opponent. Set ARK_API_KEY[/red]")
                  raise typer.Exit(1)
-            red_agent = VolcAgent(team="red", system_prompt=opponent, api_key=final_api_key, debug=debug)
+            red_agent = VolcAgent(team="red", system_prompt=opponent, api_key=final_api_key, debug=debug, ai_call_interval=ai_interval)
 
     console.print(f"[bold blue]Starting simulation: You vs {opponent_name}[/bold blue]")
     
     game = Game()
     
     # Blue Agent (You)
-    if my_prompt:
+    if interactive:
+        from leviathan_sandbox.core.agent import HumanCLIAgent
+        blue_agent = HumanCLIAgent(team="blue")
+        console.print("[bold yellow]Interactive Mode Enabled.[/bold yellow]")
+    elif my_prompt:
         if not final_api_key:
             console.print("[red]Error: API Key required for custom prompt agent. Set ARK_API_KEY or use --api-key[/red]")
             raise typer.Exit(1)
-        blue_agent = VolcAgent(team="blue", system_prompt=my_prompt, api_key=final_api_key, debug=debug)
+        blue_agent = VolcAgent(team="blue", system_prompt=my_prompt, api_key=final_api_key, debug=debug, ai_call_interval=ai_interval)
     else:
         # Default to Aggressive if no prompt
         blue_agent = AggressiveAgent(team="blue")
 
     # Run Game Loop
-    for _ in track(range(game.max_turns * 10), description="Simulating..."):
-        game.tick(blue_agent, red_agent)
-        if game.winner:
-            break
+    from rich.progress import Progress, TextColumn, BarColumn, TimeRemainingColumn
+    
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeRemainingColumn(),
+        console=console
+    ) as progress:
+        task = progress.add_task("[blue]Blue HP: 1000[/blue] | [red]Red HP: 1000[/red]", total=game.max_turns)
+        
+        while not game.winner and game.tick_count < game.max_turns:
+            game.tick(blue_agent, red_agent)
+            
+            blue_hp = int(game.players["blue"].base.hp)
+            red_hp = int(game.players["red"].base.hp)
+            progress.update(task, advance=1, description=f"[blue]Blue HP: {blue_hp}[/blue] | [red]Red HP: {red_hp}[/red]")
             
     winner = game.winner.upper() if game.winner else "DRAW"
     console.print(f"[bold green]Game Over! Winner: {winner}[/bold green]")

@@ -50,18 +50,98 @@
             margin-top: 10px;
             font-size: 18px;
         }
-        .legend {
+        #legend {
             margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
             padding: 10px;
-            border: 1px solid #3c3c3c;
-            background-color: #252526;
-            text-align: left;
-            font-size: 14px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
         }
-        .legend span {
-            margin-right: 15px;
+        .card {
+            position: relative;
+            width: 80px;
+            height: 110px;
+            background: #2c3e50;
+            border: 2px solid #34495e;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: #3498db;
+        }
+        .card img {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+            margin-bottom: 5px;
+        }
+        .card .name {
+            font-size: 11px;
+            font-weight: bold;
+            color: #ecf0f1;
+            text-align: center;
+            margin-bottom: 2px;
+        }
+        .card .stats {
+            font-size: 9px;
+            color: #bdc3c7;
+        }
+        .card .mana-cost {
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            width: 24px;
+            height: 24px;
+            background: #9b59b6;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .card .cooldown-tag {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #e67e22;
+            border: 1px solid #fff;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 9px;
+            color: white;
             font-weight: bold;
         }
+        .legend-title {
+            width: 100%;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 12px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .team-section {
+            display: flex;
+            gap: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .team-blue { background: rgba(52, 152, 219, 0.1); border-left: 4px solid #3498db; }
+        .team-red { background: rgba(231, 76, 60, 0.1); border-right: 4px solid #e74c3c; flex-direction: row-reverse; }
         #lang-switch {
             position: absolute;
             top: 20px;
@@ -124,7 +204,7 @@
             <span id="tickDisplay">Tick: 0</span>
         </div>
         
-        <div id="legend" style="margin-top: 10px; display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; color: #888; font-size: 14px;">
+        <div id="legend">
             <!-- Legend will be populated by JS -->
         </div>
 
@@ -155,7 +235,8 @@
                 red_team: "RED TEAM",
                 hp_label: "HP:",
                 mp_label: "MANA:",
-                draw: "DRAW"
+                draw: "DRAW",
+                legend_title: "Cards & Stats"
             },
             zh: {
                 title_suffix: "回放查看器",
@@ -176,7 +257,8 @@
                 red_team: "红方",
                 hp_label: "血量:",
                 mp_label: "法力:",
-                draw: "平局"
+                draw: "平局",
+                legend_title: "角色卡牌与属性"
             }
         };
 
@@ -211,28 +293,43 @@
         function updateLegend() {
             const t = translations[currentLang];
             const legendDiv = document.getElementById('legend');
-            legendDiv.innerHTML = `<strong style="margin-right: 10px; align-self: center;">${t.legend}</strong>`;
+            legendDiv.innerHTML = `<div class="legend-title">${t.legend_title || '角色卡牌与属性'}</div>`;
             
-            const units = [
-                {name: 'knight', label_en: 'Knight', label_zh: '骑士'},
-                {name: 'archer', label_en: 'Archer', label_zh: '弓箭手'},
-                {name: 'goblin', label_en: 'Goblin', label_zh: '哥布林'},
-                {name: 'orc', label_en: 'Orc', label_zh: '兽人'},
-                {name: 'catapult', label_en: 'Catapult', label_zh: '投石车'},
-                {name: 'wall', label_en: 'Wall', label_zh: '城墙'},
-                {name: 'turret', label_en: 'Turret', label_zh: '防御塔'}
+            const blueUnits = [
+                {name: 'knight', zh: '骑士', en: 'Knight', mana: 3, cd: 3, hp: 150, atk: 15, icon: 'plate-mail'},
+                {name: 'archer', zh: '弓箭手', en: 'Archer', mana: 6, cd: 2, hp: 30, atk: 10, icon: 'pocket-bow'},
+                {name: 'wall', zh: '城墙', en: 'Wall', mana: 2, cd: 2, hp: 300, atk: 'DEF', icon: 'brick-wall'},
+                {name: 'catapult', zh: '投石车', en: 'Catapult', mana: 8, cd: 8, hp: 50, atk: 'AOE 20', icon: 'catapult'}
             ];
             
-            units.forEach(u => {
-                const label = currentLang === 'zh' ? u.label_zh : u.label_en;
-                const imgPath = `assets/${u.name}_blue.png`;
-                const item = document.createElement('div');
-                item.style.display = 'inline-flex';
-                item.style.alignItems = 'center';
-                item.style.marginRight = '15px';
-                item.innerHTML = `<img src="${imgPath}" height="24" style="margin-right:5px; vertical-align:middle; image-rendering: pixelated;"> <span>${label}</span>`;
-                legendDiv.appendChild(item);
-            });
+            const redUnits = [
+                {name: 'goblin', zh: '哥布林', en: 'Goblin', mana: 2, cd: 1, hp: 20, atk: 8, icon: 'goblin-head'},
+                {name: 'orc', zh: '兽人', en: 'Orc', mana: 5, cd: 3, hp: 200, atk: 20, icon: 'orc-head'},
+                {name: 'turret', zh: '防御塔', en: 'Turret', mana: 8, cd: 7, hp: 100, atk: 15, icon: 'stone-tower'},
+                {name: 'catapult', zh: '投石车', en: 'Catapult', mana: 8, cd: 8, hp: 50, atk: 'AOE 20', icon: 'catapult'}
+            ];
+
+            const renderTeam = (units, teamClass) => {
+                const section = document.createElement('div');
+                section.className = `team-section ${teamClass}`;
+                units.forEach(u => {
+                    const label = currentLang === 'zh' ? u.zh : u.en;
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <div class="mana-cost">${u.mana}</div>
+                        <div class="cooldown-tag">CD ${u.cd}</div>
+                        <img src="https://api.iconify.design/game-icons:${u.icon}.svg?color=%23ffffff" alt="${u.name}">
+                        <div class="name">${label}</div>
+                        <div class="stats">HP ${u.hp} ${u.atk === 'DEF' ? (currentLang === 'zh' ? '防御' : 'DEF') : (currentLang === 'zh' ? '攻击' : 'ATK') + ' ' + u.atk}</div>
+                    `;
+                    section.appendChild(card);
+                });
+                return section;
+            };
+
+            legendDiv.appendChild(renderTeam(blueUnits, 'team-blue'));
+            legendDiv.appendChild(renderTeam(redUnits, 'team-red'));
         }
 
         const canvas = document.getElementById('gameCanvas');
@@ -250,9 +347,10 @@
         let isPlaying = false;
         let animationId = null;
 
-        const GRID_W = 24;
-        const GRID_H = 3;
-        const CELL_SIZE = 50; 
+        const GRID_W = 240;
+        const GRID_H = 30;
+        const SUB_GRID = 10;
+        const CELL_SIZE = 5; 
         const GRID_OFFSET_X = 60;
         const CANVAS_W = 1200 + (GRID_OFFSET_X * 2);
         const CANVAS_H = 300;
@@ -377,13 +475,28 @@
             const PLAY_AREA_W = 1200;
             const COL_WIDTH = PLAY_AREA_W / GRID_W;
 
-            // Grid lines removed for cleaner look
+            // Grid lines restored (faint)
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 1;
+            // Draw every 10 small units (1 big tile)
+            for (let y = 0; y <= GRID_H; y += SUB_GRID) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * LANE_HEIGHT);
+                ctx.lineTo(PLAY_AREA_W, y * LANE_HEIGHT);
+                ctx.stroke();
+            }
+            for (let x = 0; x <= GRID_W; x += SUB_GRID) {
+                ctx.beginPath();
+                ctx.moveTo(x * COL_WIDTH, 0);
+                ctx.lineTo(x * COL_WIDTH, CANVAS_H);
+                ctx.stroke();
+            }
             
-            // Draw Spawn Zones (Subtle)
+            // Draw Spawn Zones (Subtle) - 3 big tiles = 30 small units
             ctx.fillStyle = 'rgba(0, 0, 255, 0.05)';
-            ctx.fillRect(0, 0, COL_WIDTH * 3, CANVAS_H);
+            ctx.fillRect(0, 0, COL_WIDTH * 30, CANVAS_H);
             ctx.fillStyle = 'rgba(255, 0, 0, 0.05)';
-            ctx.fillRect((GRID_W - 3) * COL_WIDTH, 0, COL_WIDTH * 3, CANVAS_H);
+            ctx.fillRect((GRID_W - 30) * COL_WIDTH, 0, COL_WIDTH * 30, CANVAS_H);
 
             if (replayData && replayData.ticks[tickIndex]) {
                 const state = replayData.ticks[tickIndex];
@@ -410,18 +523,18 @@
                     let tilt = 0; 
 
                     if (e.type === 'unit') {
-                        const baseSpeed = 1;
-                        const speedFactor = e.move_speed ? e.move_speed / baseSpeed : 1;
+                        // 每一回合播放一次完整动作 (8帧/回合)
+                        const animRate = 8; 
                         
                         if (action === 'move') {
-                            frameIndex = Math.floor(currentPlaybackTick * 8 * speedFactor) % ANIMATION_FRAMES;
-                            bobY = Math.sin(tickFloat * 15 * speedFactor) * 2.0; 
-                            tilt = Math.sin(tickFloat * 10 * speedFactor) * 0.1;
+                            frameIndex = Math.floor(tickFloat * animRate) % ANIMATION_FRAMES;
+                            bobY = Math.sin(tickFloat * Math.PI * 2) * 1.5; 
+                            tilt = Math.sin(tickFloat * Math.PI * 2) * 0.05;
                         } else if (action === 'attack') {
-                            frameIndex = Math.floor(currentPlaybackTick * 10) % ANIMATION_FRAMES;
+                            frameIndex = Math.floor(tickFloat * 10) % ANIMATION_FRAMES;
                         } else {
                             // idle
-                            frameIndex = Math.floor(currentPlaybackTick * 2) % ANIMATION_FRAMES;
+                            frameIndex = Math.floor(tickFloat * 2) % ANIMATION_FRAMES;
                         }
                     }
 
@@ -437,11 +550,6 @@
                     ctx.ellipse(x + w/2, y + h - 5, w/2.5, h/5, 0, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.restore();
-                    
-                    let color = e.team === 'blue' ? '#4488ff' : '#ff4444';
-                    if (e.type === 'base') color = e.team === 'blue' ? '#000088' : '#880000';
-                    if (e.type === 'building' && e.function === 'defense') color = '#888';
-                    ctx.fillStyle = color;
                     
                     let imgKey = `${e.subtype}_${e.team}`;
                     let isSpriteSheet = false;
@@ -504,9 +612,10 @@
                             const cy = y + h/2;
                             
                             ctx.save();
+                            // Range Circle
                             ctx.beginPath();
                             ctx.arc(cx, cy, rangePx, 0, Math.PI * 2);
-                            ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
+                            ctx.strokeStyle = 'rgba(255, 0, 0, 0.15)';
                             ctx.lineWidth = 1;
                             ctx.setLineDash([5, 5]);
                             ctx.stroke();
@@ -514,19 +623,29 @@
                             if (e.target_id) {
                                 const target = sortedEntities.find(te => te.id === e.target_id);
                                 if (target) {
-                                    // Use interpolated pos if possible, otherwise raw
-                                    // We don't have target's interpolated pos here easily.
-                                    // Use raw pos from state (close enough)
-                                    const tx = GRID_OFFSET_X + target.x * COL_WIDTH + (target.width * COL_WIDTH)/2;
+                                    const tx = target.x * COL_WIDTH + (target.width * COL_WIDTH)/2;
                                     const ty = target.y * LANE_HEIGHT + (target.height * LANE_HEIGHT)/2;
                                     
+                                    // Target Line
                                     ctx.beginPath();
                                     ctx.moveTo(cx, cy);
                                     ctx.lineTo(tx, ty);
-                                    ctx.strokeStyle = 'rgba(255, 50, 50, 0.6)';
+                                    ctx.strokeStyle = 'rgba(255, 50, 50, 0.4)';
                                     ctx.lineWidth = 2;
                                     ctx.setLineDash([2, 2]);
                                     ctx.stroke();
+
+                                    // Catapult AOE Visual
+                                    if (e.subtype === 'catapult') {
+                                        ctx.beginPath();
+                                        const aoeRadius = 20 * COL_WIDTH; // 2 big tiles
+                                        ctx.arc(tx, ty, aoeRadius, 0, Math.PI * 2);
+                                        ctx.fillStyle = 'rgba(255, 100, 0, 0.2)';
+                                        ctx.fill();
+                                        ctx.strokeStyle = 'rgba(255, 150, 0, 0.5)';
+                                        ctx.setLineDash([]);
+                                        ctx.stroke();
+                                    }
                                 }
                             }
                             ctx.restore();
@@ -612,18 +731,28 @@
                         ctx.fillRect(manaX, y + (barH - manaFillH), barW, manaFillH);
                         
                     } else {
-                        // Units: HP bar only when damaged
-                        if (tookDamage) {
-                            const barW = w - 4;
-                            const barH = 4;
-                            const barX = x + 2;
-                            const barY = y + 2;
+                        // HP Bar
+                        const barW = w * 0.8;
+                        const barH = 4;
+                        const barX = x + (w - barW) / 2;
+                        const barY = y - 10;
+                        
+                        ctx.fillStyle = '#333';
+                        ctx.fillRect(barX, barY, barW, barH);
+                        ctx.fillStyle = e.team === 'blue' ? '#4CAF50' : '#f44336';
+                        ctx.fillRect(barX, barY, barW * (e.hp / e.max_hp), barH);
+
+                        // Cooldown Bar (Orange/Yellow)
+                        if (e.attack_speed > 1) {
+                            const cdBarH = 2;
+                            const cdBarY = barY + barH + 1;
+                            const ticksSinceLast = currentPlaybackTick - e.last_attack_tick;
+                            const cdProgress = Math.min(1, ticksSinceLast / e.attack_speed);
                             
-                            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                            ctx.fillRect(barX, barY, barW, barH);
-                            
-                            ctx.fillStyle = hpPct > 0.5 ? 'rgba(0, 255, 0, 0.8)' : 'rgba(255, 0, 0, 0.8)';
-                            ctx.fillRect(barX, barY, barW * hpPct, barH);
+                            ctx.fillStyle = '#222';
+                            ctx.fillRect(barX, cdBarY, barW, cdBarH);
+                            ctx.fillStyle = '#FFC107'; // Amber/Gold
+                            ctx.fillRect(barX, cdBarY, barW * cdProgress, cdBarH);
                         }
                     }
                 });

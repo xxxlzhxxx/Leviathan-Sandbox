@@ -107,14 +107,14 @@ class SiegeAgent(Agent):
     """A bot that focuses on siege and defense."""
     def decide(self, state: GameState) -> Action:
         # 1. Defense first: Build turret if mana allows and RNG says yes
-        if "turret" in state.me.deck and state.me.mana >= 4 and random.random() < 0.3:
+        if "turret" in state.me.deck and state.me.mana >= 8 and random.random() < 0.3:
             lane = random.randint(0, 2)
             # Defensive position
-            x = random.randint(1, 4) if self.team == "blue" else random.randint(16, 19)
+            x = random.randint(16, 19) if self.team == "red" else random.randint(1, 4)
             return Action(type="build", card_id="turret", x=x, y=lane)
 
         # 2. Siege: Catapult
-        if "catapult" in state.me.deck and state.me.mana >= 6:
+        if "catapult" in state.me.deck and state.me.mana >= 8:
             return Action(type="spawn", card_id="catapult", y=random.randint(0, 2))
 
         # 3. Tank: Orc/Knight
@@ -130,15 +130,52 @@ class SiegeAgent(Agent):
 
         return Action(type="pass", card_id="", y=0)
 
+class HumanCLIAgent(Agent):
+    """
+    An agent that waits for input from a local file or CLI.
+    Perfect for coding agents (Trae/Cursor) to 'play' by writing to a file.
+    """
+    def __init__(self, team: str, system_prompt: str = ""):
+        super().__init__(team, system_prompt)
+        self.action_file = Path("current_action.json")
+        self.state_file = Path("current_state.json")
+
+    def decide(self, state: GameState) -> Action:
+        # 1. Write current state to a file for the coding agent to read
+        with open(self.state_file, "w") as f:
+            json.dump(state.model_dump(), f, indent=2)
+        
+        # 2. Wait for the action file to be updated
+        start_time = time.time()
+        while time.time() - start_time < 60: # 60s timeout
+            if self.action_file.exists():
+                try:
+                    with open(self.action_file, "r") as f:
+                        data = json.load(f)
+                    self.action_file.unlink() # Delete after reading
+                    return Action(**data)
+                except Exception as e:
+                    pass
+            time.sleep(0.5)
+            
+        return Action(type="pass", card_id="", y=0)
+
 class VolcAgent(Agent):
     """
     Adapter for VolcEngine (Doubao) via OpenAI SDK.
+    Supports configurable AI call interval to reduce API usage.
     """
-    def __init__(self, team: str, system_prompt: str = "", api_key: str = "", model: str = "ep-20260224155825-66kc4", debug: bool = False):
+    def __init__(self, team: str, system_prompt: str = "", api_key: str = "",
+                 model: str = "ep-20260224155825-66kc4", debug: bool = False,
+                 ai_call_interval: int = 1):
         super().__init__(team, system_prompt)
         self.api_key = api_key
         self.model = model
         self.debug = debug
+        self.ai_call_interval = ai_call_interval  # 每N回合调用一次AI
+        self.turn_counter = 0  # 回合计数器
+        self.cached_action = None  # 缓存的AI决策
+        self.last_ai_call_turn = -1  # 上次调用AI的回合
         self.client = None
         
         try:
@@ -152,11 +189,29 @@ class VolcAgent(Agent):
             print("OpenAI SDK not found. Please install `openai`.")
 
     def decide(self, state: GameState) -> Action:
+        self.turn_counter += 1
+
+        # 检查是否需要调用AI（根据配置的间隔）
+        should_call_ai = (state.turn - self.last_ai_call_turn) >= self.ai_call_interval
+
+        # 如果不是AI调用回合，使用缓存的策略或pass
+        if not should_call_ai:
+            if self.cached_action and self.cached_action.type != "pass":
+                # 复用上一次的行动类型，但可以根据当前mana调整
+                if self.cached_action.type == "spawn" and state.me.mana >= 2:
+                    return self.cached_action
+                elif self.cached_action.type == "build" and state.me.mana >= 2:
+                    return self.cached_action
+            return Action(type="pass", card_id="", y=0)
+
+        # 更新上次调用AI的回合
+        self.last_ai_call_turn = state.turn
+
         state_json = state.model_dump_json()
-        
+
         # ASCII Grid Visualization for Prompt
         grid_str = "\n".join(state.grid_view)
-        
+
         # Diff Visualization
         diff_str = "\n".join(state.last_turn_changes) if state.last_turn_changes else "No significant changes."
 
@@ -168,9 +223,12 @@ class VolcAgent(Agent):
 ## YOUR STRATEGY / PERSONALITY
 {self.system_prompt}
 
+## IMPORTANT - AI CALL INTERVAL
+You are called every {self.ai_call_interval} turns. When you make a decision, consider that your next chance to change strategy will be in {self.ai_call_interval} turns. Plan accordingly and commit to longer-term strategies rather than micro-managing.
+
 RETURN ONLY A VALID JSON ACTION. No markdown.
 """
-        
+
         # User: Current State
         user_content = f"""
 Current Situation (Turn {state.turn}/{state.max_turns}):
@@ -215,7 +273,10 @@ USER:
                 # Parse JSON
                 try:
                     action_dict = json.loads(content)
-                    return Action(**action_dict)
+                    action = Action(**action_dict)
+                    # 缓存AI的决策，用于间隔回合复用
+                    self.cached_action = action
+                    return action
                 except json.JSONDecodeError:
                     # Fallback if markdown block
                     if "```json" in content:
